@@ -1,72 +1,105 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, CreditCard, Edit2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Trash2, CreditCard, Edit2, Loader2 } from 'lucide-react';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
 import { Input } from '../../ui/Input';
+import { useApi } from '../../../hooks/useApi';
 
-interface Membership {
+interface MembershipPlan {
     id: string;
-    title: string;
-    description: string;
-    duration: number; // in months
+    branch_id: string;
+    name: string;
+    description: string | null;
     price: number;
+    duration_months: number;
 }
 
-export const MembershipsView: React.FC = () => {
-    const [memberships, setMemberships] = useState<Membership[]>([
-        { id: '1', title: 'Gimnasio', description: 'Acceso a área de pesas y cardio', duration: 1, price: 400 },
-        { id: '2', title: 'Kickboxing', description: 'Clases de defensa personal', duration: 1, price: 450 },
-        { id: '3', title: 'Alberca 4 dias', description: 'Acceso a alberca y regaderas', duration: 1, price: 800 },
-        { id: '4', title: 'Regadera', description: 'Uso exclusivo de regaderas', duration: 1, price: 100 },
-    ]);
+interface MembershipsViewProps {
+    branchId: string;
+}
+
+export const MembershipsView: React.FC<MembershipsViewProps> = ({ branchId }) => {
+    const { apiCall } = useApi();
+    const [plans, setPlans] = useState<MembershipPlan[]>([]);
+    const [loading, setLoading] = useState(true);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [formData, setFormData] = useState({ title: '', description: '', duration: '', price: '' });
+    const [formData, setFormData] = useState({ name: '', description: '', duration_months: '', price: '' });
 
-    const handleOpenModal = (membership?: Membership) => {
-        if (membership) {
-            setEditingId(membership.id);
+    const loadPlans = useCallback(async () => {
+        const data = await apiCall<MembershipPlan[]>(`/api/v1/membership-plans?branch_id=${branchId}`);
+        setPlans(data);
+    }, [apiCall, branchId]);
+
+    useEffect(() => {
+        loadPlans().catch(console.error).finally(() => setLoading(false));
+    }, [loadPlans]);
+
+    const handleOpenModal = (plan?: MembershipPlan) => {
+        if (plan) {
+            setEditingId(plan.id);
             setFormData({
-                title: membership.title,
-                description: membership.description,
-                duration: membership.duration.toString(),
-                price: membership.price.toString()
+                name: plan.name,
+                description: plan.description || '',
+                duration_months: plan.duration_months.toString(),
+                price: plan.price.toString()
             });
         } else {
             setEditingId(null);
-            setFormData({ title: '', description: '', duration: '', price: '' });
+            setFormData({ name: '', description: '', duration_months: '', price: '' });
         }
         setIsModalOpen(true);
     };
 
-    const handleSave = () => {
-        if (editingId) {
-            // Edit existing
-            setMemberships(prev => prev.map(m => m.id === editingId ? {
-                ...m,
-                title: formData.title,
-                description: formData.description,
-                duration: Number(formData.duration),
-                price: Number(formData.price)
-            } : m));
-        } else {
-            // Create new
-            const newMembership: Membership = {
-                id: Date.now().toString(),
-                title: formData.title,
-                description: formData.description,
-                duration: Number(formData.duration),
-                price: Number(formData.price)
-            };
-            setMemberships([...memberships, newMembership]);
+    const handleSave = async () => {
+        try {
+            if (editingId) {
+                await apiCall(`/api/v1/membership-plans/${editingId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        name: formData.name,
+                        description: formData.description || null,
+                        duration_months: Number(formData.duration_months),
+                        price: Number(formData.price),
+                    }),
+                });
+            } else {
+                await apiCall('/api/v1/membership-plans', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        branch_id: branchId,
+                        name: formData.name,
+                        description: formData.description || null,
+                        duration_months: Number(formData.duration_months),
+                        price: Number(formData.price),
+                    }),
+                });
+            }
+            await loadPlans();
+            setIsModalOpen(false);
+        } catch (e) {
+            console.error('Error saving plan:', e);
         }
-        setIsModalOpen(false);
     };
 
-    const handleDelete = (id: string) => {
-        setMemberships(prev => prev.filter(m => m.id !== id));
+    const handleDelete = async (id: string) => {
+        try {
+            await apiCall(`/api/v1/membership-plans/${id}`, { method: 'DELETE' });
+            await loadPlans();
+        } catch (e) {
+            console.error('Error deleting plan:', e);
+        }
     };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-20 text-slate-400">
+                <Loader2 className="animate-spin mr-2" size={20} />
+                Cargando...
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-4xl mx-auto animate-in fade-in duration-500">
@@ -82,47 +115,47 @@ export const MembershipsView: React.FC = () => {
             </div>
 
             <div className="space-y-3">
-                {memberships.map((membership) => (
+                {plans.map((plan) => (
                     <div
-                        key={membership.id}
+                        key={plan.id}
                         className="group flex flex-col sm:flex-row sm:items-center gap-4 p-4 bg-white rounded-lg border border-slate-100 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.02)] hover:shadow-md hover:border-blue-100 transition-all duration-200"
                     >
                         <div className="flex-1 grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
 
                             <div className="sm:col-span-3">
                                 <label className="text-xs font-semibold text-slate-400 uppercase mb-1 block sm:hidden">Título</label>
-                                <span className="font-medium text-slate-900 text-sm">{membership.title}</span>
+                                <span className="font-medium text-slate-900 text-sm">{plan.name}</span>
                             </div>
 
                             <div className="sm:col-span-5">
                                 <label className="text-xs font-semibold text-slate-400 uppercase mb-1 block sm:hidden">Descripción</label>
-                                <span className="text-sm text-slate-500 truncate block">{membership.description}</span>
+                                <span className="text-sm text-slate-500 truncate block">{plan.description || '—'}</span>
                             </div>
 
                             <div className="sm:col-span-2">
                                 <label className="text-xs font-semibold text-slate-400 uppercase mb-1 block sm:hidden">Duración</label>
                                 <span className="text-sm text-slate-600 bg-slate-50 px-2 py-1 rounded-md inline-block">
-                                    {membership.duration} {membership.duration === 1 ? 'Mes' : 'Meses'}
+                                    {plan.duration_months} {plan.duration_months === 1 ? 'Mes' : 'Meses'}
                                 </span>
                             </div>
 
                             <div className="sm:col-span-2">
                                 <label className="text-xs font-semibold text-slate-400 uppercase mb-1 block sm:hidden">Precio</label>
-                                <span className="font-bold text-slate-900">${membership.price}</span>
+                                <span className="font-bold text-slate-900">${plan.price}</span>
                             </div>
 
                         </div>
 
                         <div className="flex items-center gap-2 border-t sm:border-t-0 border-slate-50 pt-3 sm:pt-0 mt-2 sm:mt-0 justify-end">
                             <button
-                                onClick={() => handleOpenModal(membership)}
+                                onClick={() => handleOpenModal(plan)}
                                 className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
                                 title="Editar"
                             >
                                 <Edit2 size={16} />
                             </button>
                             <button
-                                onClick={() => handleDelete(membership.id)}
+                                onClick={() => handleDelete(plan.id)}
                                 className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
                                 title="Eliminar"
                             >
@@ -132,7 +165,7 @@ export const MembershipsView: React.FC = () => {
                     </div>
                 ))}
 
-                {memberships.length === 0 && (
+                {plans.length === 0 && (
                     <div className="text-center py-12 bg-white rounded-lg border border-slate-100 border-dashed">
                         <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
                             <CreditCard size={20} />
@@ -152,8 +185,8 @@ export const MembershipsView: React.FC = () => {
                     <Input
                         label="Título"
                         placeholder="Ej. Mensualidad Gym"
-                        value={formData.title}
-                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     />
                     <Input
                         label="Descripción"
@@ -166,8 +199,8 @@ export const MembershipsView: React.FC = () => {
                             label="Duración (Meses)"
                             type="number"
                             placeholder="1"
-                            value={formData.duration}
-                            onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                            value={formData.duration_months}
+                            onChange={(e) => setFormData({ ...formData, duration_months: e.target.value })}
                         />
                         <Input
                             label="Precio"

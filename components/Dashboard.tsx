@@ -6,7 +6,11 @@ import { TableView } from './dashboard/views/TableView';
 import { MembershipsView } from './dashboard/views/MembershipsView';
 import { SettingsView } from './dashboard/views/SettingsView';
 
-export const Dashboard: React.FC = () => {
+interface DashboardProps {
+    branchId: string;
+}
+
+export const Dashboard: React.FC<DashboardProps> = ({ branchId }) => {
     const [activeTab, setActiveTab] = useState('inicio');
 
     const renderContent = () => {
@@ -20,7 +24,7 @@ export const Dashboard: React.FC = () => {
             case 'employees':
                 return <TableView title="Equipo de Trabajo" type="employee" />;
             case 'memberships':
-                return <MembershipsView />;
+                return <MembershipsView branchId={branchId} />;
             case 'settings':
                 return <SettingsView />;
             default:
