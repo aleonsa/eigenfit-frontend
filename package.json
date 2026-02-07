@@ -1,5 +1,5 @@
 {
-  "name": "gympulse-onboarding",
+  "name": "eigenfit",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@auth0/auth0-react": "^2.13.0",
     "@stripe/stripe-js": "^8.7.0",
     "lucide-react": "^0.563.0",
     "react": "^19.2.4",

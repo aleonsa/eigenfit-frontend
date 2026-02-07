@@ -39,3 +39,18 @@ export interface StepProps {
   onNext: () => void;
   onBack: () => void;
 }
+
+export interface User {
+  auth0_id: string;
+  email: string;
+  name?: string;
+  picture?: string;
+}
+
+export interface AuthUser {
+  sub: string;
+  email: string;
+  name?: string;
+  picture?: string;
+  email_verified?: boolean;
+}

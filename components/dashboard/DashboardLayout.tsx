@@ -85,8 +85,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, onT
             <aside className="w-64 border-r border-slate-100 flex flex-col hidden md:flex h-full sticky top-0">
                 <div className="p-6">
                     <div className="flex items-center gap-2 text-blue-600 font-bold text-xl tracking-tight">
-                        <div className="w-5 h-5 bg-blue-600 rounded-sm"></div>
-                        <span className="text-slate-900">GymPulse</span>
+                        {/* Logo from public folder */}
+                        <img src="public/icon.png" alt="EigenFit Logo" className="w-5 h-5" />
+                        <span className="text-slate-900">EigenFit</span>
                     </div>
                 </div>
 

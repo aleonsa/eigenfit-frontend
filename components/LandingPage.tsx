@@ -1,23 +1,22 @@
 import React from 'react';
+import { useAuth0 } from '@auth0/auth0-react';
 import { Button } from './ui/Button';
 import { ArrowRight, Check, Users, CreditCard, BarChart3, Zap } from 'lucide-react';
 
-interface LandingPageProps {
-  onStart: () => void;
-}
-
-export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
+export const LandingPage: React.FC = () => {
+  const { loginWithRedirect } = useAuth0();
   return (
     <div className="min-h-screen bg-white font-sans text-slate-900 selection:bg-blue-100">
       {/* Navbar */}
       <nav className="max-w-6xl mx-auto px-6 py-6 flex justify-between items-center">
         <div className="flex items-center gap-2 text-blue-600 font-bold text-xl tracking-tight">
-           <div className="w-6 h-6 bg-blue-600 rounded-sm"></div>
-           <span className="text-slate-900">GymPulse</span>
+           {/* Logo from public folder */}
+            <img src="public/icon.png" alt="EigenFit Logo" className="w-5 h-5" />
+           <span className="text-slate-900">EigenFit</span>
         </div>
         <div className="flex items-center gap-4">
-           <button className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors hidden sm:block">Log in</button>
-           <Button onClick={onStart} className="!px-5 !py-2">Comenzar</Button>
+           <button onClick={() => loginWithRedirect()} className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors hidden sm:block">Log in</button>
+           <Button onClick={() => loginWithRedirect()} className="!px-5 !py-2">Comenzar</Button>
         </div>
       </nav>
 
@@ -41,7 +40,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
         </p>
         
         <div className="flex flex-col sm:flex-row justify-center gap-4 mb-12">
-          <Button onClick={onStart} className="!px-8 !py-4 !text-base h-auto">
+          <Button onClick={() => loginWithRedirect()} className="!px-8 !py-4 !text-base h-auto">
             Prueba Gratis de 14 días
             <ArrowRight className="ml-2 w-4 h-4" />
           </Button>
@@ -130,9 +129,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
         <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-2 text-slate-900 font-bold">
             <div className="w-4 h-4 bg-slate-900 rounded-sm"></div>
-            GymPulse
+              
           </div>
-          <p className="text-slate-400 text-sm">© 2024 GymPulse Inc. Diseñado para la simplicidad.</p>
+          <p className="text-slate-400 text-sm">© 2024 EigenCore AI. Diseñado para la simplicidad.</p>
           <div className="flex gap-6 text-sm font-medium text-slate-500">
             <a href="#" className="hover:text-slate-900">Twitter</a>
             <a href="#" className="hover:text-slate-900">Instagram</a>
