@@ -33,9 +33,12 @@ export const useApi = () => {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        throw new Error(error.detail || 'Error en la petición');
+        throw new Error(
+          `Error en la petición: ${response.status} ${response.statusText} en el endpoint ${endpoint} - ${error.detail || 'Sin detalles adicionales'}`
+        );
       }
 
+      if (response.status === 204) return undefined as T;
       return response.json();
     },
     [getAccessTokenSilently, isAuthenticated]

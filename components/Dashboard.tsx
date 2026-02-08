@@ -19,10 +19,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ branchId }) => {
                 return <HomeView />;
             case 'visita':
                 return <VisitView />;
-            case 'clients':
-                return <TableView title="Clientes Activos" type="client" />;
+            case 'members':
+                return <TableView title="Miembros Activos" type="member" branchId={branchId} />;
             case 'employees':
-                return <TableView title="Equipo de Trabajo" type="employee" />;
+                return <TableView title="Equipo de Trabajo" type="employee" branchId={branchId} />;
             case 'memberships':
                 return <MembershipsView branchId={branchId} />;
             case 'settings':

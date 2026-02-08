@@ -11,7 +11,7 @@ export const LandingPage: React.FC = () => {
       <nav className="max-w-6xl mx-auto px-6 py-6 flex justify-between items-center">
         <div className="flex items-center gap-2 text-blue-600 font-bold text-xl tracking-tight">
            {/* Logo from public folder */}
-            <img src="public/icon.png" alt="EigenFit Logo" className="w-5 h-5" />
+            <img src="icon.png" alt="EigenFit Logo" className="w-5 h-5" />
            <span className="text-slate-900">EigenFit</span>
         </div>
         <div className="flex items-center gap-4">

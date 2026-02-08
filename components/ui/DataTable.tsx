@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from './Button';
-import { Input } from './Input';
 
 export interface Column<T> {
     header: string;
@@ -10,13 +9,24 @@ export interface Column<T> {
     className?: string;
 }
 
+interface PaginationProps {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    onPageChange: (page: number) => void;
+}
+
 interface DataTableProps<T> {
     data: T[];
     columns: Column<T>[];
     title?: string;
     searchPlaceholder?: string;
+    searchValue?: string;
+    onSearchChange?: (value: string) => void;
     actionLabel?: string;
     onAction?: () => void;
+    pagination?: PaginationProps;
+    loading?: boolean;
 }
 
 export function DataTable<T extends { id: string | number }>({
@@ -24,18 +34,32 @@ export function DataTable<T extends { id: string | number }>({
     columns,
     title,
     searchPlaceholder = "Buscar...",
+    searchValue,
+    onSearchChange,
     actionLabel,
-    onAction
+    onAction,
+    pagination,
+    loading,
 }: DataTableProps<T>) {
-    const [searchTerm, setSearchTerm] = useState('');
+    const [localSearch, setLocalSearch] = useState('');
 
-    // Basic filtering implementation
-    const filteredData = data.filter((row) => {
-        if (!searchTerm) return true;
-        return Object.values(row as any).some(
-            (value) => String(value).toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    });
+    const isServerSearch = !!onSearchChange;
+    const searchTerm = isServerSearch ? (searchValue ?? '') : localSearch;
+    const setSearchTerm = isServerSearch ? onSearchChange! : setLocalSearch;
+
+    const displayData = isServerSearch
+        ? data
+        : data.filter((row) => {
+            if (!searchTerm) return true;
+            return Object.values(row as any).some(
+                (value) => String(value).toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        });
+
+    const totalPages = pagination ? Math.max(1, Math.ceil(pagination.totalItems / pagination.pageSize)) : 1;
+    const showCount = pagination
+        ? `Mostrando ${pagination.totalItems === 0 ? 0 : pagination.page * pagination.pageSize + 1}–${Math.min((pagination.page + 1) * pagination.pageSize, pagination.totalItems)} de ${pagination.totalItems}`
+        : `Mostrando ${displayData.length} resultados`;
 
     return (
         <div className="bg-white rounded-lg border border-slate-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.02)] animate-in fade-in duration-500">
@@ -74,8 +98,14 @@ export function DataTable<T extends { id: string | number }>({
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                        {filteredData.length > 0 ? (
-                            filteredData.map((row) => (
+                        {loading ? (
+                            <tr>
+                                <td colSpan={columns.length} className="px-6 py-12 text-center text-slate-400">
+                                    Cargando...
+                                </td>
+                            </tr>
+                        ) : displayData.length > 0 ? (
+                            displayData.map((row) => (
                                 <tr key={row.id} className="hover:bg-slate-50/50 transition-colors group">
                                     {columns.map((col, index) => (
                                         <td key={index} className={`px-6 py-4 ${col.className || ''}`}>
@@ -99,12 +129,23 @@ export function DataTable<T extends { id: string | number }>({
                 </table>
             </div>
 
-            {/* Simple Pagination Placeholder */}
             <div className="px-6 py-4 border-t border-slate-50 flex items-center justify-between text-xs text-slate-500">
-                <span>Mostrando {filteredData.length} resultados</span>
+                <span>{showCount}</span>
                 <div className="flex gap-2">
-                    <button className="p-1 hover:bg-slate-100 rounded disabled:opacity-50" disabled><ChevronLeft size={16} /></button>
-                    <button className="p-1 hover:bg-slate-100 rounded disabled:opacity-50" disabled><ChevronRight size={16} /></button>
+                    <button
+                        className="p-1 hover:bg-slate-100 rounded disabled:opacity-50"
+                        disabled={!pagination || pagination.page === 0}
+                        onClick={() => pagination?.onPageChange(pagination.page - 1)}
+                    >
+                        <ChevronLeft size={16} />
+                    </button>
+                    <button
+                        className="p-1 hover:bg-slate-100 rounded disabled:opacity-50"
+                        disabled={!pagination || pagination.page >= totalPages - 1}
+                        onClick={() => pagination?.onPageChange(pagination.page + 1)}
+                    >
+                        <ChevronRight size={16} />
+                    </button>
                 </div>
             </div>
         </div>

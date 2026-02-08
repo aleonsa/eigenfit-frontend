@@ -1,13 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, Bell, LogOut, ChevronUp, Settings, User } from 'lucide-react';
+import { useAuth0 } from '@auth0/auth0-react';
 import { menuItems } from './navigation';
 
 interface UserMenuProps {
+    userName: string;
+    userEmail: string;
     onSettingsClick: () => void;
     onSignOut: () => void;
 }
 
-const UserMenu: React.FC<UserMenuProps> = ({ onSettingsClick, onSignOut }) => {
+const UserMenu: React.FC<UserMenuProps> = ({ userName, userEmail, onSettingsClick, onSignOut }) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -26,8 +29,8 @@ const UserMenu: React.FC<UserMenuProps> = ({ onSettingsClick, onSignOut }) => {
             {isOpen && (
                 <div className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-lg shadow-xl border border-slate-100 py-1 animate-in fade-in slide-in-from-bottom-2 duration-200 z-50">
                     <div className="px-4 py-3 border-b border-slate-50">
-                        <p className="text-sm font-semibold text-slate-900">Admin User</p>
-                        <p className="text-xs text-slate-500">admin@gym.com</p>
+                        <p className="text-sm font-semibold text-slate-900">{userName}</p>
+                        <p className="text-xs text-slate-500">{userEmail}</p>
                     </div>
 
                     <div className="p-1">
@@ -60,11 +63,11 @@ const UserMenu: React.FC<UserMenuProps> = ({ onSettingsClick, onSignOut }) => {
                 className={`flex items-center gap-3 w-full p-2 rounded-lg transition-all duration-200 ${isOpen ? 'bg-slate-50' : 'hover:bg-slate-50'}`}
             >
                 <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
-                    AD
+                    {userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                 </div>
                 <div className="flex-1 min-w-0 text-left">
-                    <p className="text-sm font-medium text-slate-900 truncate">Admin User</p>
-                    <p className="text-xs text-slate-500 truncate">admin@gym.com</p>
+                    <p className="text-sm font-medium text-slate-900 truncate">{userName}</p>
+                    <p className="text-xs text-slate-500 truncate">{userEmail}</p>
                 </div>
                 <ChevronUp size={16} className={`text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -79,6 +82,10 @@ interface DashboardLayoutProps {
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, onTabChange, children }) => {
+    const { user, logout } = useAuth0();
+    const userName = user?.name || user?.email || 'Usuario';
+    const userEmail = user?.email || '';
+
     return (
         <div className="flex h-screen bg-white text-slate-900 font-sans selection:bg-blue-100">
             {/* Sidebar - Fixed Left */}
@@ -86,7 +93,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, onT
                 <div className="p-6">
                     <div className="flex items-center gap-2 text-blue-600 font-bold text-xl tracking-tight">
                         {/* Logo from public folder */}
-                        <img src="public/icon.png" alt="EigenFit Logo" className="w-5 h-5" />
+                        <img src="icon.png" alt="EigenFit Logo" className="w-5 h-5" />
                         <span className="text-slate-900">EigenFit</span>
                     </div>
                 </div>
@@ -112,8 +119,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, onT
                 </nav>
 
                 <UserMenu
+                    userName={userName}
+                    userEmail={userEmail}
                     onSettingsClick={() => onTabChange('settings')}
-                    onSignOut={() => console.log('Sign Out')}
+                    onSignOut={() => logout({ logoutParams: { returnTo: window.location.origin } })}
                 />
             </aside>
 

@@ -10,7 +10,7 @@ export interface MenuItem {
 export const menuItems: MenuItem[] = [
     { id: 'inicio', label: 'Inicio', icon: Home },
     { id: 'visita', label: 'Registrar visita', icon: QrCode },
-    { id: 'clients', label: 'Clients', icon: Users },
-    { id: 'employees', label: 'Employees/Trainers', icon: Briefcase },
+    { id: 'members', label: 'Miembros', icon: Users },
+    { id: 'employees', label: 'Staff/Empleados', icon: Briefcase },
     { id: 'memberships', label: 'Membresías', icon: CreditCard },
 ];
