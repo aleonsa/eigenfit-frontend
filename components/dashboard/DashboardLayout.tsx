@@ -78,10 +78,11 @@ const UserMenu: React.FC<UserMenuProps> = ({ userName, userEmail, onSettingsClic
 interface DashboardLayoutProps {
     activeTab: string;
     onTabChange: (id: string) => void;
+    branchName: string;
     children: React.ReactNode;
 }
 
-export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, onTabChange, children }) => {
+export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, onTabChange, branchName, children }) => {
     const { user, logout } = useAuth0();
     const userName = user?.name || user?.email || 'Usuario';
     const userEmail = user?.email || '';
@@ -91,11 +92,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, onT
             {/* Sidebar - Fixed Left */}
             <aside className="w-64 border-r border-slate-100 flex flex-col hidden md:flex h-full sticky top-0">
                 <div className="p-6">
-                    <div className="flex items-center gap-2 text-blue-600 font-bold text-xl tracking-tight">
-                        {/* Logo from public folder */}
-                        <img src="icon.png" alt="EigenFit Logo" className="w-5 h-5" />
-                        <span className="text-slate-900">EigenFit</span>
-                    </div>
+                    <h2 className="text-lg font-bold text-slate-900 tracking-tight truncate" title={branchName}>
+                        {branchName}
+                    </h2>
                 </div>
 
                 <nav className="flex-1 px-4 space-y-1 mt-2">

@@ -54,7 +54,7 @@ const App: React.FC = () => {
     return <OnboardingView userId={meData?.user.id} onComplete={syncMe} />;
   }
 
-  return <Dashboard branchId={meData.branch.id} />;
+  return <Dashboard branchId={meData.branch.id} branchName={meData.branch.name} />;
 };
 
 export default App;

@@ -11,6 +11,8 @@ import { ErrorBoundary } from '../../ui/ErrorBoundary';
 
 interface MemberRow {
     id: string;
+    code: number;
+    role: string;
     full_name: string;
     email: string;
     phone: string | null;
@@ -18,6 +20,9 @@ interface MemberRow {
     memberships: string[];
     is_active: boolean;
 }
+
+const formatCode = (code: number, role: string): string =>
+    role === 'employee' ? `E-${code}` : String(code);
 
 interface MemberPage {
     items: MemberRow[];
@@ -159,6 +164,13 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
     };
 
     const columns: Column<MemberRow>[] = [
+        {
+            header: 'ID',
+            cell: (row) => (
+                <span className="font-mono font-semibold text-slate-700">{formatCode(row.code, row.role)}</span>
+            ),
+            className: 'w-20',
+        },
         {
             header: 'Nombre',
             cell: (row) => (

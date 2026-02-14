@@ -62,7 +62,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ userId, onComple
                             <p className="text-sm text-slate-500 mb-6">Cuéntanos sobre tu negocio.</p>
 
                             <Input
-                                label="Nombre del gimnasio"
+                                label="Nombre del gimnasio / franquicia"
                                 placeholder="Ej. FitLife Gym"
                                 value={gymName}
                                 onChange={(e) => setGymName(e.target.value)}
