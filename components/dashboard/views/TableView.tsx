@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Edit2, Trash2, RotateCw, Mail } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DataTable, Column } from '../../ui/DataTable';
 import { MemberDetailDrawer } from './MemberDetailDrawer';
 import { Modal } from '../../ui/Modal';
@@ -8,6 +9,7 @@ import { Button } from '../../ui/Button';
 import { useApi } from '../../../hooks/useApi';
 import { MemberCreationModal } from './MemberCreationModal';
 import { ErrorBoundary } from '../../ui/ErrorBoundary';
+import { useDebouncedValue } from '../../../hooks/useDebouncedValue';
 
 interface MemberRow {
     id: string;
@@ -39,11 +41,10 @@ const PAGE_SIZE = 20;
 
 export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) => {
     const { apiCall } = useApi();
-    const [members, setMembers] = useState<MemberRow[]>([]);
-    const [total, setTotal] = useState(0);
+    const queryClient = useQueryClient();
     const [page, setPage] = useState(0);
     const [search, setSearch] = useState('');
-    const [loading, setLoading] = useState(true);
+    const debouncedSearch = useDebouncedValue(search, 300);
 
     const [selectedMember, setSelectedMember] = useState<MemberRow | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -63,30 +64,26 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
     const [inviting, setInviting] = useState(false);
 
     const endpoint = type === 'member' ? 'members' : 'employees';
+    const queryKey = ['table', type, branchId, page, debouncedSearch];
 
-    const loadMembers = useCallback(async () => {
-        setLoading(true);
-        try {
+    const { data, isLoading: loading } = useQuery({
+        queryKey,
+        queryFn: async () => {
             const skip = page * PAGE_SIZE;
-            const data = await apiCall<MemberPage>(
-                `/api/v1/${endpoint}?branch_id=${branchId}&skip=${skip}&limit=${PAGE_SIZE}&search=${encodeURIComponent(search)}`
+            return apiCall<MemberPage>(
+                `/api/v1/${endpoint}?branch_id=${branchId}&skip=${skip}&limit=${PAGE_SIZE}&search=${encodeURIComponent(debouncedSearch)}`
             );
-            setMembers(data.items);
-            setTotal(data.total);
-        } catch (err) {
-            console.error('Error loading members:', err);
-        } finally {
-            setLoading(false);
-        }
-    }, [apiCall, branchId, page, search, endpoint]);
+        },
+    });
 
-    useEffect(() => {
-        loadMembers();
-    }, [loadMembers]);
+    const members = data?.items ?? [];
+    const total = data?.total ?? 0;
+
+    const invalidateTable = () => queryClient.invalidateQueries({ queryKey: ['table', type, branchId] });
 
     useEffect(() => {
         setPage(0);
-    }, [search]);
+    }, [debouncedSearch]);
 
     const handleRowClick = (row: MemberRow) => {
         if (type === 'member') {
@@ -125,7 +122,7 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
                 });
             }
             setIsModalOpen(false);
-            loadMembers();
+            invalidateTable();
         } catch (err: any) {
             console.error('Error saving member:', err);
             alert(`Error al guardar: ${err.message}`);
@@ -138,7 +135,7 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
         if (!deletingId) return;
         try {
             await apiCall(`/api/v1/${endpoint}/${deletingId}`, { method: 'DELETE' });
-            loadMembers();
+            invalidateTable();
         } catch (err) {
             console.error('Error deleting member:', err);
         } finally {

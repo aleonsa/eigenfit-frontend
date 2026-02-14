@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { DataTable, Column } from '../../ui/DataTable';
 import { useApi } from '../../../hooks/useApi';
 
@@ -124,66 +125,61 @@ const PAGE_SIZE = 20;
 
 export const HomeView: React.FC<HomeViewProps> = ({ branchId }) => {
     const { apiCall } = useApi();
-    const [allRows, setAllRows] = useState<CheckInRow[]>([]);
-    const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(0);
-    const [tableTotal, setTableTotal] = useState(0);
-    const [totalMembers, setTotalMembers] = useState<number | null>(null);
-    const [todayVisits, setTodayVisits] = useState<number | null>(null);
     const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
 
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const todayInMexico = getMexicoDateParam();
-            const skip = page * PAGE_SIZE;
-            const role = typeFilter === 'E' ? 'employee' : typeFilter === 'M' ? 'member' : 'all';
+    useEffect(() => {
+        setPage(0);
+    }, [typeFilter]);
 
+    const todayInMexico = getMexicoDateParam();
+    const role = typeFilter === 'E' ? 'employee' : typeFilter === 'M' ? 'member' : 'all';
+
+    const { data, isLoading: loading } = useQuery({
+        queryKey: ['home', branchId, todayInMexico, page, typeFilter],
+        queryFn: async () => {
+            const skip = page * PAGE_SIZE;
             const [attendancesPage, totalAttendancesPage, membersPage] = await Promise.all([
                 apiCall<AttendancePage>(`/api/v1/attendances/page?branch_id=${branchId}&attendance_date=${todayInMexico}&role=${role}&skip=${skip}&limit=${PAGE_SIZE}`),
                 apiCall<AttendancePage>(`/api/v1/attendances/page?branch_id=${branchId}&attendance_date=${todayInMexico}&role=all&skip=0&limit=1`),
                 apiCall<{ items: MemberRecord[]; total: number }>(`/api/v1/members?branch_id=${branchId}&limit=1`),
             ]);
 
-            const checkInRows: CheckInRow[] = attendancesPage.items.map(a => {
+            const rows: CheckInRow[] = attendancesPage.items.map(a => {
                 const name = a.member_name ?? 'Desconocido';
-                const role = a.member_role ?? 'member';
+                const memberRole = a.member_role ?? 'member';
                 const code = a.member_code ?? 0;
                 const isCheckedOut = !!a.check_out_time;
                 const hasActiveMembership = a.member_has_active_membership === true;
-                const status: CheckInRow['status'] = role === 'employee'
+                const status: CheckInRow['status'] = memberRole === 'employee'
                     ? (isCheckedOut ? 'Inactivo' : 'Activo')
                     : (hasActiveMembership ? 'Activo' : 'Inactivo');
                 return {
                     id: a.id,
-                    displayCode: formatCode(code, role),
+                    displayCode: formatCode(code, memberRole),
                     name,
                     initials: getInitials(name),
                     checkIn: formatTime(a.check_in_time),
                     checkOut: formatTime(a.check_out_time),
                     status,
-                    type: role === 'employee' ? 'E' : 'M',
+                    type: memberRole === 'employee' ? 'E' : 'M',
                 };
             });
 
-            setAllRows(checkInRows);
-            setTableTotal(attendancesPage.total);
-            setTodayVisits(totalAttendancesPage.total);
-            setTotalMembers(membersPage.total);
-        } catch (e) {
-            console.error('Error fetching home data:', e);
-        } finally {
-            setLoading(false);
-        }
-    }, [branchId, apiCall, page, typeFilter]);
+            return {
+                rows,
+                tableTotal: attendancesPage.total,
+                todayVisits: totalAttendancesPage.total,
+                totalMembers: membersPage.total,
+            };
+        },
+        placeholderData: keepPreviousData,
+    });
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
-    useEffect(() => {
-        setPage(0);
-    }, [typeFilter]);
+    const allRows = data?.rows ?? [];
+    const tableTotal = data?.tableTotal ?? 0;
+    const todayVisits = data?.todayVisits ?? null;
+    const totalMembers = data?.totalMembers ?? null;
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">

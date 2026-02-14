@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Plus, Trash2, CreditCard, Edit2, Loader2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
 import { Input } from '../../ui/Input';
 import { useApi } from '../../../hooks/useApi';
+import { useApiQuery } from '../../../hooks/useApiQuery';
 
 interface MembershipPlan {
     id: string;
@@ -20,21 +22,19 @@ interface MembershipsViewProps {
 
 export const MembershipsView: React.FC<MembershipsViewProps> = ({ branchId }) => {
     const { apiCall } = useApi();
-    const [plans, setPlans] = useState<MembershipPlan[]>([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
+    const queryKey = ['membership-plans', branchId];
+
+    const { data: plans = [], isLoading: loading } = useApiQuery<MembershipPlan[]>(
+        queryKey,
+        `/api/v1/membership-plans?branch_id=${branchId}`,
+    );
+
+    const invalidatePlans = () => queryClient.invalidateQueries({ queryKey });
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formData, setFormData] = useState({ name: '', description: '', duration_months: '', price: '' });
-
-    const loadPlans = useCallback(async () => {
-        const data = await apiCall<MembershipPlan[]>(`/api/v1/membership-plans?branch_id=${branchId}`);
-        setPlans(data);
-    }, [apiCall, branchId]);
-
-    useEffect(() => {
-        loadPlans().catch(console.error).finally(() => setLoading(false));
-    }, [loadPlans]);
 
     const handleOpenModal = (plan?: MembershipPlan) => {
         if (plan) {
@@ -76,7 +76,7 @@ export const MembershipsView: React.FC<MembershipsViewProps> = ({ branchId }) =>
                     }),
                 });
             }
-            await loadPlans();
+            invalidatePlans();
             setIsModalOpen(false);
         } catch (e) {
             console.error('Error saving plan:', e);
@@ -86,7 +86,7 @@ export const MembershipsView: React.FC<MembershipsViewProps> = ({ branchId }) =>
     const handleDelete = async (id: string) => {
         try {
             await apiCall(`/api/v1/membership-plans/${id}`, { method: 'DELETE' });
-            await loadPlans();
+            invalidatePlans();
         } catch (e) {
             console.error('Error deleting plan:', e);
         }

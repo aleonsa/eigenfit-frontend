@@ -10,6 +10,7 @@ import {
     TrendingDown,
     Minus,
 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../ui/Button';
 import { StreakLeaderboard, type StreakLeaderboardItem } from './visit/StreakLeaderboard';
 import { useApi } from '../../../hooks/useApi';
@@ -159,16 +160,11 @@ function parseCodeInput(input: string): { role: string; code: number } | null {
 
 export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk }) => {
     const { apiCall } = useApi();
+    const queryClient = useQueryClient();
     const [idInput, setIdInput] = useState('');
     const [feedback, setFeedback] = useState<FeedbackData | null>(null);
     const [error, setError] = useState('');
     const [processing, setProcessing] = useState(false);
-    const [todayAttendances, setTodayAttendances] = useState<AttendanceRecord[]>([]);
-    const [statsLoading, setStatsLoading] = useState(false);
-    const [statsError, setStatsError] = useState('');
-    const [streakItems, setStreakItems] = useState<StreakLeaderboardItem[]>([]);
-    const [streakLoading, setStreakLoading] = useState(false);
-    const [streakError, setStreakError] = useState('');
     const [now, setNow] = useState(() => new Date());
 
     const closeFeedback = useCallback(() => {
@@ -180,68 +176,50 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
         setTimeout(() => setFeedback(null), 4000);
     };
 
-    const fetchTodayAttendances = useCallback(async () => {
-        if (!branchId) {
-            return;
-        }
+    const todayInMexico = getMexicoDateParam();
 
-        setStatsLoading(true);
-        try {
-            const todayInMexico = getMexicoDateParam();
-            const attendances = await apiCall<AttendanceRecord[]>(
-                `/api/v1/attendances?branch_id=${branchId}&attendance_date=${todayInMexico}&limit=200`
-            );
-            setTodayAttendances(attendances);
-            setStatsError('');
-        } catch (err) {
-            console.error('Error fetching visit trend:', err);
-            setStatsError('No se pudieron cargar las visitas del día.');
-        } finally {
-            setStatsLoading(false);
-        }
-    }, [apiCall, branchId]);
+    const {
+        data: todayAttendances = [],
+        isLoading: statsLoading,
+        error: statsQueryError,
+    } = useQuery({
+        queryKey: ['visit-attendances', branchId, todayInMexico],
+        queryFn: () => apiCall<AttendanceRecord[]>(
+            `/api/v1/attendances?branch_id=${branchId}&attendance_date=${todayInMexico}&limit=200`
+        ),
+        enabled: !!branchId,
+        refetchInterval: 60000,
+    });
+    const statsError = statsQueryError ? 'No se pudieron cargar las visitas del día.' : '';
 
-    const fetchStreakLeaderboard = useCallback(async () => {
-        if (!branchId) {
-            return;
-        }
-
-        setStreakLoading(true);
-        try {
+    const {
+        data: streakData,
+        isLoading: streakLoading,
+        error: streakQueryError,
+    } = useQuery({
+        queryKey: ['visit-streaks', branchId],
+        queryFn: async () => {
             const leaderboard = await apiCall<StreakLeaderboardResponse>(
                 `/api/v1/attendances/leaderboard/streak?branch_id=${branchId}&limit=5`
             );
-
-            const mappedItems: StreakLeaderboardItem[] = leaderboard.items.map(item => ({
+            return leaderboard.items.map(item => ({
                 memberId: item.member_id,
                 memberName: item.member_name,
                 totalVisits: item.total_visits,
                 streakDays: item.streak_days,
                 rank: item.rank,
             }));
+        },
+        enabled: !!branchId,
+        refetchInterval: 60000,
+    });
+    const streakItems: StreakLeaderboardItem[] = streakData ?? [];
+    const streakError = streakQueryError ? 'No se pudo cargar la racha histórica.' : '';
 
-            setStreakItems(mappedItems);
-            setStreakError('');
-        } catch (err) {
-            console.error('Error fetching streak leaderboard:', err);
-            setStreakError('No se pudo cargar la racha histórica.');
-        } finally {
-            setStreakLoading(false);
-        }
-    }, [apiCall, branchId]);
-
-    useEffect(() => {
-        fetchTodayAttendances();
-        fetchStreakLeaderboard();
-    }, [fetchTodayAttendances, fetchStreakLeaderboard]);
-
-    useEffect(() => {
-        const refreshTimer = window.setInterval(() => {
-            fetchTodayAttendances();
-            fetchStreakLeaderboard();
-        }, 60000);
-        return () => window.clearInterval(refreshTimer);
-    }, [fetchTodayAttendances, fetchStreakLeaderboard]);
+    const invalidateVisitData = useCallback(() => {
+        queryClient.invalidateQueries({ queryKey: ['visit-attendances', branchId] });
+        queryClient.invalidateQueries({ queryKey: ['visit-streaks', branchId] });
+    }, [queryClient, branchId]);
 
     useEffect(() => {
         const timer = window.setInterval(() => {
@@ -349,7 +327,7 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                     method: 'POST',
                     body: JSON.stringify({}),
                 });
-                await Promise.all([fetchTodayAttendances(), fetchStreakLeaderboard()]);
+                await invalidateVisitData();
                 showFeedback({ type: 'out', memberName: member.full_name, code: displayCode });
             } else {
                 // Check in
@@ -360,7 +338,7 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                         member_id: member.id,
                     }),
                 });
-                await Promise.all([fetchTodayAttendances(), fetchStreakLeaderboard()]);
+                await invalidateVisitData();
                 showFeedback({ type: 'in', memberName: member.full_name, code: displayCode });
             }
         } catch (err: any) {

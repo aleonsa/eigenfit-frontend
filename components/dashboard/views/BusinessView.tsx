@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
     TrendingUp,
     TrendingDown,
@@ -10,7 +10,7 @@ import {
     Clock,
     Loader2,
 } from 'lucide-react';
-import { useApi } from '../../../hooks/useApi';
+import { useApiQuery } from '../../../hooks/useApiQuery';
 
 interface BusinessDashboardResponse {
     generated_at: string;
@@ -88,30 +88,11 @@ const formatShortDate = (iso: string | null): string => {
 };
 
 export const BusinessView: React.FC<BusinessViewProps> = ({ branchId }) => {
-    const { apiCall } = useApi();
-    const [dashboard, setDashboard] = useState<BusinessDashboardResponse | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-
-    const loadDashboard = useCallback(async () => {
-        setLoading(true);
-        try {
-            const data = await apiCall<BusinessDashboardResponse>(
-                `/api/v1/business/dashboard?branch_id=${branchId}&inactive_days=30&popular_plans_limit=4&recent_payments_limit=5&inactive_members_limit=5`
-            );
-            setDashboard(data);
-            setError('');
-        } catch (err) {
-            console.error('Error loading business dashboard:', err);
-            setError('No se pudo cargar el dashboard de negocio.');
-        } finally {
-            setLoading(false);
-        }
-    }, [apiCall, branchId]);
-
-    useEffect(() => {
-        loadDashboard();
-    }, [loadDashboard]);
+    const { data: dashboard, isLoading: loading, error: queryError } = useApiQuery<BusinessDashboardResponse>(
+        ['business-dashboard', branchId],
+        `/api/v1/business/dashboard?branch_id=${branchId}&inactive_days=30&popular_plans_limit=4&recent_payments_limit=5&inactive_members_limit=5`,
+    );
+    const error = queryError ? 'No se pudo cargar el dashboard de negocio.' : '';
 
     const kpis = useMemo(() => {
         if (!dashboard) return [];
