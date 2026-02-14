@@ -29,19 +29,17 @@ interface AttendanceRecord {
     check_out_time: string | null;
 }
 
-interface MonthlyStreakLeaderboardItemRecord {
+interface StreakLeaderboardItemRecord {
     member_id: string;
     member_name: string;
     member_code: number;
-    month_visits: number;
+    total_visits: number;
     streak_days: number;
     rank: number;
 }
 
-interface MonthlyStreakLeaderboardResponse {
-    year: number;
-    month: number;
-    items: MonthlyStreakLeaderboardItemRecord[];
+interface StreakLeaderboardResponse {
+    items: StreakLeaderboardItemRecord[];
 }
 
 interface HourlyVisitPoint {
@@ -94,11 +92,6 @@ const mexicoHourFormatter = new Intl.DateTimeFormat('en-US', {
     hour12: false,
 });
 
-const mexicoYearMonthFormatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: MEXICO_CITY_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-});
 
 function getMexicoDateParam(date = new Date()): string {
     const parts = mexicoDatePartsFormatter.formatToParts(date);
@@ -114,16 +107,6 @@ function getMexicoHour(date: Date): number {
         .find(part => part.type === 'hour')?.value;
     const hour = Number.parseInt(hourString ?? '0', 10);
     return Number.isNaN(hour) ? 0 : hour;
-}
-
-function getMexicoYearMonth(date = new Date()): { year: number; month: number } {
-    const parts = mexicoYearMonthFormatter.formatToParts(date);
-    const year = Number.parseInt(parts.find(part => part.type === 'year')?.value ?? '0', 10);
-    const month = Number.parseInt(parts.find(part => part.type === 'month')?.value ?? '1', 10);
-    return {
-        year: Number.isNaN(year) ? 0 : year,
-        month: Number.isNaN(month) ? 1 : month,
-    };
 }
 
 function capitalizeFirst(text: string): string {
@@ -218,22 +201,21 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
         }
     }, [apiCall, branchId]);
 
-    const fetchMonthlyStreakLeaderboard = useCallback(async () => {
+    const fetchStreakLeaderboard = useCallback(async () => {
         if (!branchId) {
             return;
         }
 
         setStreakLoading(true);
         try {
-            const { year, month } = getMexicoYearMonth();
-            const leaderboard = await apiCall<MonthlyStreakLeaderboardResponse>(
-                `/api/v1/attendances/leaderboard/monthly-streak?branch_id=${branchId}&year=${year}&month=${month}&limit=5`
+            const leaderboard = await apiCall<StreakLeaderboardResponse>(
+                `/api/v1/attendances/leaderboard/streak?branch_id=${branchId}&limit=5`
             );
 
             const mappedItems: StreakLeaderboardItem[] = leaderboard.items.map(item => ({
                 memberId: item.member_id,
                 memberName: item.member_name,
-                monthVisits: item.month_visits,
+                totalVisits: item.total_visits,
                 streakDays: item.streak_days,
                 rank: item.rank,
             }));
@@ -241,8 +223,8 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
             setStreakItems(mappedItems);
             setStreakError('');
         } catch (err) {
-            console.error('Error fetching monthly streak leaderboard:', err);
-            setStreakError('No se pudo cargar la racha del mes.');
+            console.error('Error fetching streak leaderboard:', err);
+            setStreakError('No se pudo cargar la racha histórica.');
         } finally {
             setStreakLoading(false);
         }
@@ -250,16 +232,16 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
 
     useEffect(() => {
         fetchTodayAttendances();
-        fetchMonthlyStreakLeaderboard();
-    }, [fetchTodayAttendances, fetchMonthlyStreakLeaderboard]);
+        fetchStreakLeaderboard();
+    }, [fetchTodayAttendances, fetchStreakLeaderboard]);
 
     useEffect(() => {
         const refreshTimer = window.setInterval(() => {
             fetchTodayAttendances();
-            fetchMonthlyStreakLeaderboard();
+            fetchStreakLeaderboard();
         }, 60000);
         return () => window.clearInterval(refreshTimer);
-    }, [fetchTodayAttendances, fetchMonthlyStreakLeaderboard]);
+    }, [fetchTodayAttendances, fetchStreakLeaderboard]);
 
     useEffect(() => {
         const timer = window.setInterval(() => {
@@ -367,7 +349,7 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                     method: 'POST',
                     body: JSON.stringify({}),
                 });
-                await Promise.all([fetchTodayAttendances(), fetchMonthlyStreakLeaderboard()]);
+                await Promise.all([fetchTodayAttendances(), fetchStreakLeaderboard()]);
                 showFeedback({ type: 'out', memberName: member.full_name, code: displayCode });
             } else {
                 // Check in
@@ -378,7 +360,7 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                         member_id: member.id,
                     }),
                 });
-                await Promise.all([fetchTodayAttendances(), fetchMonthlyStreakLeaderboard()]);
+                await Promise.all([fetchTodayAttendances(), fetchStreakLeaderboard()]);
                 showFeedback({ type: 'in', memberName: member.full_name, code: displayCode });
             }
         } catch (err: any) {

@@ -32,7 +32,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName }) =>
     };
 
     if (kioskMode) {
-        return <KioskView branchId={branchId} onExit={deactivateKiosk} />;
+        return <KioskView branchId={branchId} branchName={branchName} onExit={deactivateKiosk} />;
     }
 
     const renderContent = () => {
@@ -50,7 +50,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName }) =>
             case 'memberships':
                 return <MembershipsView branchId={branchId} />;
             case 'settings':
-                return <SettingsView />;
+                return <SettingsView branchId={branchId} />;
             default:
                 return <HomeView branchId={branchId} />;
         }

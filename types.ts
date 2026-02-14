@@ -7,7 +7,7 @@ export enum OnboardingStep {
 }
 
 export enum PlanType {
-  PRO = 'pro'
+  BASIC = 'basic'
 }
 
 export interface OnboardingData {
@@ -53,4 +53,46 @@ export interface AuthUser {
   name?: string;
   picture?: string;
   email_verified?: boolean;
+}
+
+// Billing types
+export interface BillingStatus {
+  billing_plan: string;
+  billing_status: string;
+  billing_email: string;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  payment_method_added: boolean;
+  last_payment_at: string | null;
+  stripe_subscription_id: string | null;
+}
+
+export interface BillingPeriodItem {
+  id: string;
+  period_start: string;
+  period_end: string;
+  plan: string;
+  status: string;
+  amount_cents: number | null;
+  currency: string | null;
+  paid_at: string | null;
+}
+
+export interface PaymentHistory {
+  items: BillingPeriodItem[];
+  total: number;
+}
+
+export interface CreateBranchResponse {
+  branch: {
+    id: string;
+    name: string;
+    address: string | null;
+    auth0_org_id: string | null;
+    created_at: string;
+    modified_at: string;
+  };
+  checkout_url: string | null;
+  checkout_session_id: string | null;
 }

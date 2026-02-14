@@ -3,6 +3,7 @@ import { ArrowRight, ArrowLeft, Check } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useApi } from '../../hooks/useApi';
+import type { CreateBranchResponse } from '../../types';
 
 interface OnboardingViewProps {
     userId?: string;
@@ -21,8 +22,9 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ userId, onComple
     const handleFinish = async () => {
         if (!userId) return;
         setSaving(true);
+        setError('');
         try {
-            await apiCall('/api/v1/branches', {
+            const data = await apiCall<CreateBranchResponse>('/api/v1/branches', {
                 method: 'POST',
                 body: JSON.stringify({
                     name: gymName,
@@ -30,6 +32,14 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ userId, onComple
                     user_id: userId,
                 }),
             });
+
+            // If Stripe checkout URL is returned, redirect to it
+            if (data.checkout_url) {
+                window.location.href = data.checkout_url;
+                return;
+            }
+
+            // If no Stripe (disabled), just complete onboarding
             onComplete();
         } catch (e) {
             console.error('Error creating branch:', e);
@@ -108,7 +118,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ userId, onComple
                                             <p className="text-sm text-slate-500">Pago mes a mes</p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-lg font-bold text-slate-900">$499</p>
+                                            <p className="text-lg font-bold text-slate-900">$799</p>
                                             <p className="text-xs text-slate-400">/mes por sucursal</p>
                                         </div>
                                     </div>
@@ -128,7 +138,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ userId, onComple
                                             <p className="text-sm text-slate-500">Ahorra 2 meses</p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-lg font-bold text-slate-900">$4,990</p>
+                                            <p className="text-lg font-bold text-slate-900">$7,990</p>
                                             <p className="text-xs text-slate-400">/año por sucursal</p>
                                         </div>
                                     </div>
@@ -153,7 +163,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ userId, onComple
                                     isLoading={saving}
                                     className="flex-1 justify-between"
                                 >
-                                    Comenzar prueba gratis
+                                    Continuar al pago
                                     <ArrowRight className="w-4 h-4" />
                                 </Button>
                             </div>
@@ -162,7 +172,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ userId, onComple
                 </div>
 
                 <div className="mt-6 text-center text-xs text-slate-400">
-                    14 días gratis. Sin tarjeta de crédito.
+                    Serás redirigido a Stripe para completar el pago de forma segura.
                 </div>
             </div>
         </div>

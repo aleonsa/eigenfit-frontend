@@ -8,6 +8,15 @@ interface AttendanceRecord {
     member_id: string;
     check_in_time: string;
     check_out_time: string | null;
+    member_name: string | null;
+    member_code: number | null;
+    member_role: string | null;
+    member_has_active_membership: boolean | null;
+}
+
+interface AttendancePage {
+    items: AttendanceRecord[];
+    total: number;
 }
 
 interface MemberRecord {
@@ -25,14 +34,31 @@ interface CheckInRow {
     checkIn: string;
     checkOut: string;
     status: 'Activo' | 'Inactivo';
-    type: 'C' | 'E';
+    type: 'M' | 'E';
 }
 
-type TypeFilter = 'all' | 'C' | 'E';
+type TypeFilter = 'all' | 'M' | 'E';
 
 interface HomeViewProps {
     branchId: string;
 }
+
+const MEXICO_CITY_TIMEZONE = 'America/Mexico_City';
+
+const mexicoDatePartsFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: MEXICO_CITY_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+});
+
+const getMexicoDateParam = (date = new Date()): string => {
+    const parts = mexicoDatePartsFormatter.formatToParts(date);
+    const year = parts.find(part => part.type === 'year')?.value ?? '0000';
+    const month = parts.find(part => part.type === 'month')?.value ?? '01';
+    const day = parts.find(part => part.type === 'day')?.value ?? '01';
+    return `${year}-${month}-${day}`;
+};
 
 const formatTime = (iso: string | null): string => {
     if (!iso) return '';
@@ -81,7 +107,7 @@ const columns: Column<CheckInRow>[] = [
         header: 'Tipo',
         cell: (row) => (
             <span className={`inline-flex w-6 h-6 items-center justify-center rounded text-xs font-bold
-                ${row.type === 'E' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700'}`}>
+                ${row.type === 'E' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
                 {row.type}
             </span>
         )
@@ -90,14 +116,18 @@ const columns: Column<CheckInRow>[] = [
 
 const filterButtons: { value: TypeFilter; label: string }[] = [
     { value: 'all', label: 'Todos' },
-    { value: 'C', label: 'Miembros' },
+    { value: 'M', label: 'Miembros' },
     { value: 'E', label: 'Empleados' },
 ];
+
+const PAGE_SIZE = 20;
 
 export const HomeView: React.FC<HomeViewProps> = ({ branchId }) => {
     const { apiCall } = useApi();
     const [allRows, setAllRows] = useState<CheckInRow[]>([]);
     const [loading, setLoading] = useState(true);
+    const [page, setPage] = useState(0);
+    const [tableTotal, setTableTotal] = useState(0);
     const [totalMembers, setTotalMembers] = useState<number | null>(null);
     const [todayVisits, setTodayVisits] = useState<number | null>(null);
     const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -105,24 +135,25 @@ export const HomeView: React.FC<HomeViewProps> = ({ branchId }) => {
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const today = new Date().toISOString().split('T')[0];
+            const todayInMexico = getMexicoDateParam();
+            const skip = page * PAGE_SIZE;
+            const role = typeFilter === 'E' ? 'employee' : typeFilter === 'M' ? 'member' : 'all';
 
-            const [attendances, membersPage, employeesPage] = await Promise.all([
-                apiCall<AttendanceRecord[]>(`/api/v1/attendances?branch_id=${branchId}&attendance_date=${today}&limit=200`),
-                apiCall<{ items: MemberRecord[]; total: number }>(`/api/v1/members?branch_id=${branchId}&limit=100`),
-                apiCall<{ items: MemberRecord[]; total: number }>(`/api/v1/employees?branch_id=${branchId}&limit=100`),
+            const [attendancesPage, totalAttendancesPage, membersPage] = await Promise.all([
+                apiCall<AttendancePage>(`/api/v1/attendances/page?branch_id=${branchId}&attendance_date=${todayInMexico}&role=${role}&skip=${skip}&limit=${PAGE_SIZE}`),
+                apiCall<AttendancePage>(`/api/v1/attendances/page?branch_id=${branchId}&attendance_date=${todayInMexico}&role=all&skip=0&limit=1`),
+                apiCall<{ items: MemberRecord[]; total: number }>(`/api/v1/members?branch_id=${branchId}&limit=1`),
             ]);
 
-            const memberMap = new Map<string, MemberRecord>();
-            membersPage.items.forEach(m => memberMap.set(m.id, m));
-            employeesPage.items.forEach(m => memberMap.set(m.id, m));
-
-            const checkInRows: CheckInRow[] = attendances.map(a => {
-                const member = memberMap.get(a.member_id);
-                const name = member?.full_name ?? 'Desconocido';
-                const role = member?.role ?? 'member';
-                const code = member?.code ?? 0;
+            const checkInRows: CheckInRow[] = attendancesPage.items.map(a => {
+                const name = a.member_name ?? 'Desconocido';
+                const role = a.member_role ?? 'member';
+                const code = a.member_code ?? 0;
                 const isCheckedOut = !!a.check_out_time;
+                const hasActiveMembership = a.member_has_active_membership === true;
+                const status: CheckInRow['status'] = role === 'employee'
+                    ? (isCheckedOut ? 'Inactivo' : 'Activo')
+                    : (hasActiveMembership ? 'Activo' : 'Inactivo');
                 return {
                     id: a.id,
                     displayCode: formatCode(code, role),
@@ -130,28 +161,29 @@ export const HomeView: React.FC<HomeViewProps> = ({ branchId }) => {
                     initials: getInitials(name),
                     checkIn: formatTime(a.check_in_time),
                     checkOut: formatTime(a.check_out_time),
-                    status: isCheckedOut ? 'Inactivo' : 'Activo',
-                    type: role === 'employee' ? 'E' : 'C',
+                    status,
+                    type: role === 'employee' ? 'E' : 'M',
                 };
             });
 
             setAllRows(checkInRows);
-            setTodayVisits(attendances.length);
+            setTableTotal(attendancesPage.total);
+            setTodayVisits(totalAttendancesPage.total);
             setTotalMembers(membersPage.total);
         } catch (e) {
             console.error('Error fetching home data:', e);
         } finally {
             setLoading(false);
         }
-    }, [branchId, apiCall]);
+    }, [branchId, apiCall, page, typeFilter]);
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
 
-    const filteredRows = typeFilter === 'all'
-        ? allRows
-        : allRows.filter(r => r.type === typeFilter);
+    useEffect(() => {
+        setPage(0);
+    }, [typeFilter]);
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -190,10 +222,16 @@ export const HomeView: React.FC<HomeViewProps> = ({ branchId }) => {
             {/* Today's Activity Table */}
             <DataTable
                 title="Actividad de Hoy"
-                data={filteredRows}
+                data={allRows}
                 columns={columns}
                 searchPlaceholder="Buscar por nombre..."
                 loading={loading}
+                pagination={{
+                    page,
+                    pageSize: PAGE_SIZE,
+                    totalItems: tableTotal,
+                    onPageChange: setPage,
+                }}
             />
         </div>
     );

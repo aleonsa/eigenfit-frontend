@@ -1,15 +1,79 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
-import { Lock, CreditCard, Monitor } from 'lucide-react';
+import { Lock, CreditCard, Monitor, ExternalLink, Loader2 } from 'lucide-react';
 import { KIOSK_PIN_KEY, getKioskPin } from './kiosk/KioskPinModal';
+import { useApi } from '../../../hooks/useApi';
+import type { BillingStatus, PaymentHistory } from '../../../types';
 
-export const SettingsView: React.FC = () => {
+interface SettingsViewProps {
+    branchId: string;
+}
+
+export const SettingsView: React.FC<SettingsViewProps> = ({ branchId }) => {
+    const { apiCall } = useApi();
     const [activeTab, setActiveTab] = useState<'security' | 'billing' | 'kiosk'>('security');
     const [currentPin, setCurrentPin] = useState('');
     const [newPin, setNewPin] = useState('');
     const [confirmPin, setConfirmPin] = useState('');
     const [pinMessage, setPinMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    // Billing state
+    const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
+    const [paymentHistory, setPaymentHistory] = useState<PaymentHistory | null>(null);
+    const [billingLoading, setBillingLoading] = useState(false);
+    const [portalLoading, setPortalLoading] = useState(false);
+    const [cancelLoading, setCancelLoading] = useState(false);
+
+    const loadBillingData = useCallback(async () => {
+        setBillingLoading(true);
+        try {
+            const [status, history] = await Promise.all([
+                apiCall<BillingStatus>(`/api/v1/billing/status?branch_id=${branchId}`),
+                apiCall<PaymentHistory>(`/api/v1/billing/history?branch_id=${branchId}&limit=10`),
+            ]);
+            setBillingStatus(status);
+            setPaymentHistory(history);
+        } catch (e) {
+            console.error('Error loading billing data:', e);
+        } finally {
+            setBillingLoading(false);
+        }
+    }, [branchId, apiCall]);
+
+    useEffect(() => {
+        if (activeTab === 'billing') {
+            loadBillingData();
+        }
+    }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const handleOpenPortal = async () => {
+        setPortalLoading(true);
+        try {
+            const data = await apiCall<{ portal_url: string }>(`/api/v1/billing/portal-session?branch_id=${branchId}`, {
+                method: 'POST',
+                body: JSON.stringify({ return_url: window.location.href }),
+            });
+            window.open(data.portal_url, '_blank');
+        } catch (e) {
+            console.error('Error opening billing portal:', e);
+        } finally {
+            setPortalLoading(false);
+        }
+    };
+
+    const handleCancelSubscription = async () => {
+        if (!confirm('¿Estás seguro de que quieres cancelar tu suscripción? Se mantendrá activa hasta el final del periodo actual.')) return;
+        setCancelLoading(true);
+        try {
+            await apiCall(`/api/v1/billing/cancel?branch_id=${branchId}`, { method: 'POST' });
+            await loadBillingData();
+        } catch (e) {
+            console.error('Error canceling subscription:', e);
+        } finally {
+            setCancelLoading(false);
+        }
+    };
 
     const handlePinChange = (e: React.FormEvent) => {
         e.preventDefault();
@@ -33,6 +97,31 @@ export const SettingsView: React.FC = () => {
         setNewPin('');
         setConfirmPin('');
         setPinMessage({ type: 'success', text: 'PIN actualizado correctamente.' });
+    };
+
+    const formatAmount = (cents: number | null, currency: string | null) => {
+        if (cents === null) return '—';
+        const amount = cents / 100;
+        return new Intl.NumberFormat('es-MX', {
+            style: 'currency',
+            currency: currency || 'MXN',
+        }).format(amount);
+    };
+
+    const formatDate = (dateStr: string | null) => {
+        if (!dateStr) return '—';
+        return new Date(dateStr).toLocaleDateString('es-MX', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+        });
+    };
+
+    const statusLabels: Record<string, { label: string; className: string }> = {
+        active: { label: 'Activo', className: 'text-green-600 bg-green-50' },
+        pending: { label: 'Pendiente', className: 'text-yellow-600 bg-yellow-50' },
+        past_due: { label: 'Pago vencido', className: 'text-red-600 bg-red-50' },
+        canceled: { label: 'Cancelado', className: 'text-slate-600 bg-slate-100' },
     };
 
     return (
@@ -97,30 +186,109 @@ export const SettingsView: React.FC = () => {
 
                 {activeTab === 'billing' && (
                     <div className="space-y-8 animate-in fade-in duration-300">
-                        <div>
-                            <h3 className="text-lg font-semibold text-slate-900">Métodos de Pago</h3>
-                            <p className="text-sm text-slate-500 mt-1">Gestiona tus tarjetas y facturación.</p>
-                        </div>
-
-                        <div className="p-4 border border-slate-200 rounded-lg flex items-center justify-between bg-slate-50/50">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-8 bg-slate-200 rounded flex items-center justify-center text-xs font-bold text-slate-500">
-                                    VISA
-                                </div>
-                                <div>
-                                    <p className="text-sm font-medium text-slate-900">Visa terminada en 4242</p>
-                                    <p className="text-xs text-slate-500">Expira en 12/2026</p>
-                                </div>
+                        {billingLoading ? (
+                            <div className="flex items-center justify-center py-12">
+                                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
                             </div>
-                            <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">Predeterminada</span>
-                        </div>
+                        ) : billingStatus ? (
+                            <>
+                                {/* Plan & Status */}
+                                <div>
+                                    <h3 className="text-lg font-semibold text-slate-900">Tu Plan</h3>
+                                    <div className="mt-4 p-4 border border-slate-200 rounded-lg bg-slate-50/50">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-medium text-slate-900 capitalize">
+                                                    Plan {billingStatus.billing_plan}
+                                                </p>
+                                                <p className="text-xs text-slate-500 mt-1">
+                                                    {billingStatus.current_period_end
+                                                        ? `Próximo cobro: ${formatDate(billingStatus.current_period_end)}`
+                                                        : 'Sin periodo activo'}
+                                                </p>
+                                            </div>
+                                            <span className={`text-xs font-medium px-2 py-1 rounded ${
+                                                statusLabels[billingStatus.billing_status]?.className || 'text-slate-600 bg-slate-100'
+                                            }`}>
+                                                {statusLabels[billingStatus.billing_status]?.label || billingStatus.billing_status}
+                                            </span>
+                                        </div>
+                                        {billingStatus.cancel_at_period_end && (
+                                            <p className="text-xs text-amber-600 mt-2">
+                                                Tu suscripción se cancelará al final del periodo actual.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
 
-                        <div>
-                            <Button variant="outline" className="gap-2">
-                                <CreditCard size={16} />
-                                Agregar nuevo método de pago
-                            </Button>
-                        </div>
+                                {/* Actions */}
+                                <div className="flex gap-3">
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleOpenPortal}
+                                        isLoading={portalLoading}
+                                        className="gap-2"
+                                    >
+                                        <ExternalLink size={16} />
+                                        Gestionar facturación
+                                    </Button>
+                                    {billingStatus.billing_status === 'active' && !billingStatus.cancel_at_period_end && (
+                                        <Button
+                                            variant="secondary"
+                                            onClick={handleCancelSubscription}
+                                            isLoading={cancelLoading}
+                                        >
+                                            Cancelar suscripción
+                                        </Button>
+                                    )}
+                                </div>
+
+                                {/* Payment History */}
+                                {paymentHistory && paymentHistory.items.length > 0 && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-slate-900 mb-4">Historial de Pagos</h3>
+                                        <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-slate-50">
+                                                    <tr>
+                                                        <th className="text-left px-4 py-3 font-medium text-slate-500">Fecha</th>
+                                                        <th className="text-left px-4 py-3 font-medium text-slate-500">Periodo</th>
+                                                        <th className="text-right px-4 py-3 font-medium text-slate-500">Monto</th>
+                                                        <th className="text-right px-4 py-3 font-medium text-slate-500">Estado</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {paymentHistory.items.map((item) => (
+                                                        <tr key={item.id}>
+                                                            <td className="px-4 py-3 text-slate-700">{formatDate(item.paid_at)}</td>
+                                                            <td className="px-4 py-3 text-slate-500">
+                                                                {formatDate(item.period_start)} — {formatDate(item.period_end)}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right text-slate-700 font-medium">
+                                                                {formatAmount(item.amount_cents, item.currency)}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right">
+                                                                <span className={`text-xs font-medium px-2 py-1 rounded ${
+                                                                    item.status === 'paid'
+                                                                        ? 'text-green-600 bg-green-50'
+                                                                        : 'text-slate-600 bg-slate-100'
+                                                                }`}>
+                                                                    {item.status === 'paid' ? 'Pagado' : item.status}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div className="text-center py-8">
+                                <p className="text-slate-500">No hay información de facturación disponible.</p>
+                            </div>
+                        )}
                     </div>
                 )}
 

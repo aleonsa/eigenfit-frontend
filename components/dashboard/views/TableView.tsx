@@ -179,8 +179,12 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
                     className={`font-medium text-slate-900 hover:text-blue-600 hover:underline text-left ${type === 'member' ? 'cursor-pointer' : 'cursor-default'}`}
                 >
                     {row.full_name}
-                    <br />
-                    <span className="text-sm text-slate-500">{row.email}</span>
+                    {type === 'member' && (
+                        <>
+                            <br />
+                            <span className="text-sm text-slate-500">{row.email}</span>
+                        </>
+                    )}
                 </button>
             ),
         },
@@ -188,10 +192,15 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
             header: 'Teléfono',
             cell: (row) => <span className="text-slate-400">{row.phone || '—'}</span>,
         },
-        {
-            header: 'Membresías',
-            cell: (row) => <span>{row.memberships?.join(', ') || '—'}</span>,
-        },
+        ...(type === 'member'
+            ? [{
+                header: 'Membresías',
+                cell: (row: MemberRow) => <span>{row.memberships?.join(', ') || '—'}</span>,
+            }]
+            : [{
+                header: 'Correo',
+                cell: (row: MemberRow) => <span className="text-slate-600">{row.email}</span>,
+            }]),
         {
             header: 'Estado',
             cell: (row) => (

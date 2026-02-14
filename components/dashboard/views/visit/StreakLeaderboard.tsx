@@ -6,7 +6,7 @@ const medals = ['🥇', '🥈', '🥉'];
 export interface StreakLeaderboardItem {
     memberId: string;
     memberName: string;
-    monthVisits: number;
+    totalVisits: number;
     streakDays: number;
     rank: number;
 }
@@ -58,13 +58,23 @@ export const StreakLeaderboard: React.FC<StreakLeaderboardProps> = ({
         if (showEmpty) {
             return (
                 <div className="flex-1 flex items-center justify-center px-6">
-                    <p className="text-sm text-slate-500 text-center">Aun no hay datos de racha este mes.</p>
+                    <p className="text-sm text-slate-500 text-center">Aun no hay datos de racha historica.</p>
                 </div>
             );
         }
 
         return (
-            <div className="divide-y divide-slate-50 flex-1">
+            <div className="flex-1">
+                <div className="px-6 py-2.5 border-b border-slate-100 bg-slate-50/60 flex items-center">
+                    <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Miembro
+                    </span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Dias en racha
+                    </span>
+                </div>
+
+                <div className="divide-y divide-slate-50">
                 {items.map((member, idx) => (
                     <div
                         key={member.memberId}
@@ -98,9 +108,6 @@ export const StreakLeaderboard: React.FC<StreakLeaderboardProps> = ({
                             }`}>
                                 {member.memberName}
                             </p>
-                            <p className="text-xs text-slate-400">
-                                {member.monthVisits} visitas este mes
-                            </p>
                         </div>
 
                         <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold flex-shrink-0 ${
@@ -113,6 +120,7 @@ export const StreakLeaderboard: React.FC<StreakLeaderboardProps> = ({
                         </div>
                     </div>
                 ))}
+                </div>
             </div>
         );
     };
@@ -121,14 +129,14 @@ export const StreakLeaderboard: React.FC<StreakLeaderboardProps> = ({
         <div className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col ${className}`}>
             <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
                 <Trophy size={20} className="text-amber-500" />
-                <h3 className="text-lg font-bold text-slate-900">Racha del Mes</h3>
+                <h3 className="text-lg font-bold text-slate-900">Los Imparables</h3>
             </div>
 
             {renderBody()}
 
             <div className="px-6 py-3 bg-slate-50/50 border-t border-slate-100">
                 <p className="text-[11px] text-slate-400 text-center">
-                    Domingos no cuentan · 2 descansos permitidos por semana. Es decir, si visitas el gimnasio 4 veces por semana, mantienes tu racha.
+                    La racha se mantiene con 4 asistencias por semana (domingo no cuenta). Puedes faltar hasta 2 dias sin romperla.
                 </p>
             </div>
         </div>
