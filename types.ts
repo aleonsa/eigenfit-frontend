@@ -84,6 +84,17 @@ export interface PaymentHistory {
   total: number;
 }
 
+export interface PlanPrice {
+  price_id: string;
+  amount: number; // in cents
+  currency: string;
+  interval: 'monthly' | 'yearly';
+}
+
+export interface PlansResponse {
+  prices: PlanPrice[];
+}
+
 export interface CreateBranchResponse {
   branch: {
     id: string;

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowRight, ArrowLeft, Check } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useApi } from '../../hooks/useApi';
-import type { CreateBranchResponse } from '../../types';
+import type { CreateBranchResponse, PlanPrice, PlansResponse } from '../../types';
 
 interface OnboardingViewProps {
     userId?: string;
@@ -18,6 +18,27 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ userId, onComple
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [prices, setPrices] = useState<PlanPrice[]>([]);
+    const [loadingPrices, setLoadingPrices] = useState(true);
+
+    useEffect(() => {
+        apiCall<PlansResponse>('/api/v1/billing/plans')
+            .then((data) => setPrices(data.prices))
+            .catch((e) => console.error('Failed to load prices:', e))
+            .finally(() => setLoadingPrices(false));
+    }, []);
+
+    const monthlyPrice = prices.find((p) => p.interval === 'monthly');
+    const yearlyPrice = prices.find((p) => p.interval === 'yearly');
+
+    const formatPrice = (amount: number, currency: string) => {
+        return new Intl.NumberFormat('es-MX', {
+            style: 'currency',
+            currency: currency.toUpperCase(),
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        }).format(amount / 100);
+    };
 
     const handleFinish = async () => {
         if (!userId) return;
@@ -30,6 +51,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ userId, onComple
                     name: gymName,
                     address: address || null,
                     user_id: userId,
+                    billing_cycle: billingCycle,
                 }),
             });
 
@@ -104,45 +126,58 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ userId, onComple
                             <p className="text-sm text-slate-500 mb-6">Un solo plan, todo incluido. Cancela cuando quieras.</p>
 
                             <div className="space-y-3 mb-6">
-                                <button
-                                    onClick={() => setBillingCycle('monthly')}
-                                    className={`w-full p-4 rounded-lg border-2 text-left transition-colors ${
-                                        billingCycle === 'monthly'
-                                            ? 'border-blue-600 bg-blue-50/50'
-                                            : 'border-slate-200 hover:border-slate-300'
-                                    }`}
-                                >
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <p className="font-semibold text-slate-900">Mensual</p>
-                                            <p className="text-sm text-slate-500">Pago mes a mes</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-lg font-bold text-slate-900">$799</p>
-                                            <p className="text-xs text-slate-400">/mes por sucursal</p>
-                                        </div>
-                                    </div>
-                                </button>
+                                {loadingPrices ? (
+                                    <>
+                                        <div className="w-full h-[72px] rounded-lg bg-slate-100 animate-pulse" />
+                                        <div className="w-full h-[72px] rounded-lg bg-slate-100 animate-pulse" />
+                                    </>
+                                ) : (
+                                    <>
+                                        {monthlyPrice && (
+                                            <button
+                                                onClick={() => setBillingCycle('monthly')}
+                                                className={`w-full p-4 rounded-lg border-2 text-left transition-colors ${
+                                                    billingCycle === 'monthly'
+                                                        ? 'border-blue-600 bg-blue-50/50'
+                                                        : 'border-slate-200 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <p className="font-semibold text-slate-900">Mensual</p>
+                                                        <p className="text-sm text-slate-500">Pago mes a mes</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-lg font-bold text-slate-900">{formatPrice(monthlyPrice.amount, monthlyPrice.currency)}</p>
+                                                        <p className="text-xs text-slate-400">/mes por sucursal</p>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        )}
 
-                                <button
-                                    onClick={() => setBillingCycle('yearly')}
-                                    className={`w-full p-4 rounded-lg border-2 text-left transition-colors ${
-                                        billingCycle === 'yearly'
-                                            ? 'border-blue-600 bg-blue-50/50'
-                                            : 'border-slate-200 hover:border-slate-300'
-                                    }`}
-                                >
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <p className="font-semibold text-slate-900">Anual</p>
-                                            <p className="text-sm text-slate-500">Ahorra 2 meses</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-lg font-bold text-slate-900">$7,990</p>
-                                            <p className="text-xs text-slate-400">/año por sucursal</p>
-                                        </div>
-                                    </div>
-                                </button>
+                                        {yearlyPrice && (
+                                            <button
+                                                onClick={() => setBillingCycle('yearly')}
+                                                className={`w-full p-4 rounded-lg border-2 text-left transition-colors ${
+                                                    billingCycle === 'yearly'
+                                                        ? 'border-blue-600 bg-blue-50/50'
+                                                        : 'border-slate-200 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <p className="font-semibold text-slate-900">Anual</p>
+                                                        <p className="text-sm text-slate-500">Ahorra 2 meses</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-lg font-bold text-slate-900">{formatPrice(yearlyPrice.amount, yearlyPrice.currency)}</p>
+                                                        <p className="text-xs text-slate-400">/año por sucursal</p>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        )}
+                                    </>
+                                )}
                             </div>
 
                             <div className="space-y-3 mb-6 text-sm text-slate-500">
