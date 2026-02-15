@@ -8,6 +8,7 @@ import { useApi } from './hooks/useApi';
 interface MeData {
   user: { id: string; email: string; full_name: string };
   branch: { id: string; name: string } | null;
+  role: string | null;
 }
 
 const App: React.FC = () => {
@@ -54,7 +55,7 @@ const App: React.FC = () => {
     return <OnboardingView userId={meData?.user.id} onComplete={syncMe} />;
   }
 
-  return <Dashboard branchId={meData.branch.id} branchName={meData.branch.name} />;
+  return <Dashboard branchId={meData.branch.id} branchName={meData.branch.name} userRole={meData.role || 'employee'} />;
 };
 
 export default App;

@@ -13,6 +13,7 @@ import { useDebouncedValue } from '../../../hooks/useDebouncedValue';
 
 interface MemberRow {
     id: string;
+    branch_id: string;
     code: number;
     role: string;
     full_name: string;
@@ -289,6 +290,10 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
                     isOpen={isMemberModalOpen}
                     onClose={() => setIsMemberModalOpen(false)}
                     branchId={branchId}
+                    onCreated={() => {
+                        setIsMemberModalOpen(false);
+                        invalidateTable();
+                    }}
                 />
             )}
 
@@ -296,6 +301,11 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
                 isOpen={isDrawerOpen}
                 onClose={() => setIsDrawerOpen(false)}
                 member={selectedMember}
+                onMembershipUpdated={invalidateTable}
+                onEditMember={(memberToEdit) => {
+                    setIsDrawerOpen(false);
+                    handleOpenModal(memberToEdit);
+                }}
             />
 
             <Modal

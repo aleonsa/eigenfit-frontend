@@ -15,7 +15,7 @@ export const LandingPage: React.FC = () => {
            <span className="text-slate-900">EigenFit</span>
         </div>
         <div className="flex items-center gap-4">
-           <button onClick={() => loginWithRedirect()} className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors hidden sm:block">Log in</button>
+           <button onClick={() => loginWithRedirect()} className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors hidden sm:block">Iniciar Sesión</button>
            <Button onClick={() => loginWithRedirect()} className="!px-5 !py-2">Comenzar</Button>
         </div>
       </nav>

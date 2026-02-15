@@ -42,7 +42,7 @@ const UserMenu: React.FC<UserMenuProps> = ({ userName, userEmail, onSettingsClic
                             className="w-full text-left px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-md flex items-center gap-2 transition-colors"
                         >
                             <Settings size={14} />
-                            Account Settings
+                            Configuración
                         </button>
                         <button
                             onClick={() => {
@@ -52,7 +52,7 @@ const UserMenu: React.FC<UserMenuProps> = ({ userName, userEmail, onSettingsClic
                             className="w-full text-left px-3 py-2 text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 rounded-md flex items-center gap-2 transition-colors mt-1"
                         >
                             <LogOut size={14} />
-                            Sign out
+                            Cerrar Sesión
                         </button>
                     </div>
                 </div>
@@ -79,13 +79,16 @@ interface DashboardLayoutProps {
     activeTab: string;
     onTabChange: (id: string) => void;
     branchName: string;
+    userRole: string;
     children: React.ReactNode;
 }
 
-export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, onTabChange, branchName, children }) => {
+export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, onTabChange, branchName, userRole, children }) => {
     const { user, logout } = useAuth0();
     const userName = user?.name || user?.email || 'Usuario';
     const userEmail = user?.email || '';
+    const isAdmin = userRole !== 'employee';
+    const visibleMenuItems = menuItems.filter(item => !item.adminOnly || isAdmin);
 
     return (
         <div className="flex h-screen bg-white text-slate-900 font-sans selection:bg-blue-100">
@@ -98,7 +101,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, onT
                 </div>
 
                 <nav className="flex-1 px-4 space-y-1 mt-2">
-                    {menuItems.map((item) => {
+                    {visibleMenuItems.map((item) => {
                         const Icon = item.icon;
                         const isActive = activeTab === item.id;
                         return (
@@ -131,7 +134,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, onT
                 {/* Header */}
                 <header className="h-16 border-b border-slate-100 bg-white flex items-center justify-between px-6 shrink-0 z-10">
                     <h1 className="text-lg font-semibold text-slate-900 capitalize">
-                        {menuItems.find(m => m.id === activeTab)?.label}
+                        {visibleMenuItems.find(m => m.id === activeTab)?.label}
                     </h1>
                 </header>
 

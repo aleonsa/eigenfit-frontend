@@ -13,9 +13,10 @@ const KIOSK_STORAGE_KEY = 'eigenfit_kiosk_mode';
 interface DashboardProps {
     branchId: string;
     branchName: string;
+    userRole: string;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName, userRole }) => {
     const [activeTab, setActiveTab] = useState('inicio');
     const [kioskMode, setKioskMode] = useState(() => {
         return localStorage.getItem(KIOSK_STORAGE_KEY) === 'true';
@@ -50,14 +51,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName }) =>
             case 'memberships':
                 return <MembershipsView branchId={branchId} />;
             case 'settings':
-                return <SettingsView branchId={branchId} />;
+                return <SettingsView branchId={branchId} userRole={userRole} />;
             default:
                 return <HomeView branchId={branchId} />;
         }
     };
 
     return (
-        <DashboardLayout activeTab={activeTab} onTabChange={setActiveTab} branchName={branchName}>
+        <DashboardLayout activeTab={activeTab} onTabChange={setActiveTab} branchName={branchName} userRole={userRole}>
             {renderContent()}
         </DashboardLayout>
     );

@@ -8,10 +8,12 @@ import type { BillingStatus, PaymentHistory } from '../../../types';
 
 interface SettingsViewProps {
     branchId: string;
+    userRole: string;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ branchId }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ branchId, userRole }) => {
     const { apiCall } = useApi();
+    const isAdmin = userRole !== 'employee';
     const [activeTab, setActiveTab] = useState<'security' | 'billing' | 'kiosk'>('security');
     const [currentPin, setCurrentPin] = useState('');
     const [newPin, setNewPin] = useState('');
@@ -141,26 +143,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ branchId }) => {
                     <Lock size={16} />
                     Seguridad
                 </button>
-                <button
-                    onClick={() => setActiveTab('billing')}
-                    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'billing'
-                            ? 'border-blue-600 text-blue-600'
-                            : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                        }`}
-                >
-                    <CreditCard size={16} />
-                    Facturación
-                </button>
-                <button
-                    onClick={() => setActiveTab('kiosk')}
-                    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'kiosk'
-                            ? 'border-blue-600 text-blue-600'
-                            : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                        }`}
-                >
-                    <Monitor size={16} />
-                    Modo Kiosco
-                </button>
+                {isAdmin && (
+                    <button
+                        onClick={() => setActiveTab('billing')}
+                        className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'billing'
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                            }`}
+                    >
+                        <CreditCard size={16} />
+                        Facturación
+                    </button>
+                )}
+                {isAdmin && (
+                    <button
+                        onClick={() => setActiveTab('kiosk')}
+                        className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'kiosk'
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                            }`}
+                    >
+                        <Monitor size={16} />
+                        Modo Kiosco
+                    </button>
+                )}
             </div>
 
             {/* Content */}
@@ -184,7 +190,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ branchId }) => {
                     </div>
                 )}
 
-                {activeTab === 'billing' && (
+                {isAdmin && activeTab === 'billing' && (
                     <div className="space-y-8 animate-in fade-in duration-300">
                         {billingLoading ? (
                             <div className="flex items-center justify-center py-12">
@@ -292,7 +298,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ branchId }) => {
                     </div>
                 )}
 
-                {activeTab === 'kiosk' && (
+                {isAdmin && activeTab === 'kiosk' && (
                     <div className="max-w-md space-y-6 animate-in fade-in duration-300">
                         <div>
                             <h3 className="text-lg font-semibold text-slate-900">PIN del Modo Kiosco</h3>
