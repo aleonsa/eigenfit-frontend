@@ -410,12 +410,26 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                     method: 'POST',
                     body: JSON.stringify({}),
                 });
+
+                let streakDays: number | null = null;
+                if (memberType === 'member') {
+                    try {
+                        const streak = await apiCall<MemberStreakResponse>(
+                            `/api/v1/attendances/member-streak?branch_id=${branchId}&member_id=${member.id}`
+                        );
+                        streakDays = streak.streak_days;
+                    } catch (streakError) {
+                        console.error('Error loading member streak:', streakError);
+                    }
+                }
+
                 await invalidateVisitData();
                 showFeedback({
                     type: 'out',
                     memberName: member.full_name,
                     code: displayCode,
                     memberType,
+                    streakDays,
                 });
             } else {
                 // Check in
@@ -713,10 +727,30 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                                 </div>
                             ) : (
                                 <div className="px-6 pb-6">
-                                    <div className="bg-white/60 rounded-xl p-4 text-center">
-                                        <p className="text-sm text-slate-500">Salida registrada</p>
-                                        <p className="text-sm text-slate-400 mt-1">¡Te esperamos pronto!</p>
-                                    </div>
+                                    {feedback.memberType === 'member' ? (
+                                        <div className="space-y-3">
+                                            <div className="bg-white/80 rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+                                                <div className="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center">
+                                                    <Flame size={18} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-slate-500">Tu racha actual</p>
+                                                    <p className="text-lg font-bold text-slate-900">
+                                                        {feedback.streakDays ?? 0} dias
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="bg-white/60 rounded-xl p-4 text-center">
+                                                <p className="text-sm text-slate-500">Salida registrada</p>
+                                                <p className="text-sm text-slate-400 mt-1">¡Te esperamos pronto!</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-white/60 rounded-xl p-4 text-center">
+                                            <p className="text-sm text-slate-500">Salida registrada</p>
+                                            <p className="text-sm text-slate-400 mt-1">¡Te esperamos pronto!</p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
