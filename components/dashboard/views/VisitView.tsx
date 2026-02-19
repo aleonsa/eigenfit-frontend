@@ -3,12 +3,14 @@ import {
     QrCode,
     Monitor,
     CheckCircle,
+    Flame,
     LogIn,
     LogOut,
     Clock3,
     TrendingUp,
     TrendingDown,
     Minus,
+    AlertTriangle,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../ui/Button';
@@ -20,6 +22,7 @@ interface MemberRecord {
     code: number;
     role: string;
     full_name: string;
+    is_active?: boolean;
 }
 
 interface AttendanceRecord {
@@ -49,6 +52,11 @@ interface AttendancePageResponse {
     total: number;
 }
 
+interface MemberStreakResponse {
+    member_id: string;
+    streak_days: number;
+}
+
 interface VisitTimeSlotPoint {
     minutesOfDay: number;
     visits: number;
@@ -59,6 +67,9 @@ interface FeedbackData {
     type: 'in' | 'out';
     memberName: string;
     code: string;
+    memberType: 'member' | 'employee';
+    isActiveMembership?: boolean | null;
+    streakDays?: number | null;
 }
 
 interface VisitViewProps {
@@ -382,6 +393,8 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                 return;
             }
 
+            const memberType: 'member' | 'employee' = parsed.role === 'employee' ? 'employee' : 'member';
+            const isActiveMembership = memberType === 'member' ? (member.is_active ?? false) : null;
             const displayCode = parsed.role === 'employee' ? `E-${parsed.code}` : String(parsed.code);
 
             // 2. Check if already checked in
@@ -398,7 +411,12 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                     body: JSON.stringify({}),
                 });
                 await invalidateVisitData();
-                showFeedback({ type: 'out', memberName: member.full_name, code: displayCode });
+                showFeedback({
+                    type: 'out',
+                    memberName: member.full_name,
+                    code: displayCode,
+                    memberType,
+                });
             } else {
                 // Check in
                 await apiCall('/api/v1/attendances/check-in', {
@@ -408,8 +426,28 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                         member_id: member.id,
                     }),
                 });
+
+                let streakDays: number | null = null;
+                if (memberType === 'member') {
+                    try {
+                        const streak = await apiCall<MemberStreakResponse>(
+                            `/api/v1/attendances/member-streak?branch_id=${branchId}&member_id=${member.id}`
+                        );
+                        streakDays = streak.streak_days;
+                    } catch (streakError) {
+                        console.error('Error loading member streak:', streakError);
+                    }
+                }
+
                 await invalidateVisitData();
-                showFeedback({ type: 'in', memberName: member.full_name, code: displayCode });
+                showFeedback({
+                    type: 'in',
+                    memberName: member.full_name,
+                    code: displayCode,
+                    memberType,
+                    isActiveMembership,
+                    streakDays,
+                });
             }
         } catch (err: any) {
             console.error('Error during check-in/out:', err);
@@ -486,21 +524,6 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                                 {mexicoClock}
                             </p>
                             <p className="text-xs text-slate-500 mt-0.5">{mexicoDateLabel}</p>
-
-                            <div className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 mt-3 text-xs font-medium ${
-                                trendDirection === 'up'
-                                    ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
-                                    : trendDirection === 'down'
-                                    ? 'bg-orange-50 border-orange-100 text-orange-700'
-                                    : 'bg-slate-100 border-slate-200 text-slate-600'
-                            }`}>
-                                <TrendIcon size={12} />
-                                <span className="tabular-nums">
-                                    {slotDelta > 0 ? '+' : ''}
-                                    {slotDelta}%
-                                </span>
-                                <span>vs media hora anterior</span>
-                            </div>
                         </div>
 
                         <div className="lg:border-l lg:border-slate-100 lg:pl-6">
@@ -635,10 +658,50 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
 
                             {feedback.type === 'in' ? (
                                 <div className="px-6 pb-6">
-                                    <div className="bg-white/60 rounded-xl p-4 text-center flex items-center justify-center gap-2">
-                                        <CheckCircle size={16} className="text-green-500" />
-                                        <p className="text-sm text-slate-600">Entrada registrada</p>
-                                    </div>
+                                    {feedback.memberType === 'member' ? (
+                                        <div className="space-y-3">
+                                            <div className={`rounded-xl border p-4 ${
+                                                feedback.isActiveMembership
+                                                    ? 'bg-emerald-50 border-emerald-200'
+                                                    : 'bg-amber-50 border-amber-200'
+                                            }`}>
+                                                <div className="flex items-center gap-2">
+                                                    {feedback.isActiveMembership ? (
+                                                        <CheckCircle size={16} className="text-emerald-600" />
+                                                    ) : (
+                                                        <AlertTriangle size={16} className="text-amber-600" />
+                                                    )}
+                                                    <p className={`text-sm font-semibold ${
+                                                        feedback.isActiveMembership ? 'text-emerald-700' : 'text-amber-700'
+                                                    }`}>
+                                                        {feedback.isActiveMembership ? 'Membresia activa' : 'Membresia inactiva'}
+                                                    </p>
+                                                </div>
+                                                {!feedback.isActiveMembership && (
+                                                    <p className="mt-2 text-sm text-amber-700">
+                                                        Acercate a recepcion para renovar tu membresia.
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <div className="bg-white/80 rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+                                                <div className="w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center">
+                                                    <Flame size={18} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-slate-500">Tu racha actual</p>
+                                                    <p className="text-lg font-bold text-slate-900">
+                                                        {feedback.streakDays ?? 0} dias
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-white/60 rounded-xl p-4 text-center flex items-center justify-center gap-2">
+                                            <CheckCircle size={16} className="text-green-500" />
+                                            <p className="text-sm text-slate-600">Entrada registrada</p>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="px-6 pb-6">
