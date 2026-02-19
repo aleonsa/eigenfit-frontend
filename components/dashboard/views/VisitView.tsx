@@ -28,6 +28,7 @@ interface AttendanceRecord {
     branch_id: string;
     check_in_time: string;
     check_out_time: string | null;
+    member_role?: string | null;
 }
 
 interface StreakLeaderboardItemRecord {
@@ -43,8 +44,13 @@ interface StreakLeaderboardResponse {
     items: StreakLeaderboardItemRecord[];
 }
 
-interface HourlyVisitPoint {
-    hour: number;
+interface AttendancePageResponse {
+    items: AttendanceRecord[];
+    total: number;
+}
+
+interface VisitTimeSlotPoint {
+    minutesOfDay: number;
     visits: number;
     label: string;
 }
@@ -61,8 +67,10 @@ interface VisitViewProps {
 }
 
 const MEXICO_CITY_TIMEZONE = 'America/Mexico_City';
-const VISIT_CHART_START_HOUR = 5;
-const VISIT_CHART_END_HOUR = 23;
+const VISIT_CHART_START_MINUTES = 5 * 60;
+const VISIT_CHART_END_MINUTES = 23 * 60;
+const VISIT_SLOT_MINUTES = 30;
+const VISIT_PAGE_SIZE = 200;
 
 const mexicoDatePartsFormatter = new Intl.DateTimeFormat('en-US', {
     timeZone: MEXICO_CITY_TIMEZONE,
@@ -87,9 +95,10 @@ const mexicoDateLabelFormatter = new Intl.DateTimeFormat('es-MX', {
     year: 'numeric',
 });
 
-const mexicoHourFormatter = new Intl.DateTimeFormat('en-US', {
+const mexicoTimePartsFormatter = new Intl.DateTimeFormat('en-US', {
     timeZone: MEXICO_CITY_TIMEZONE,
     hour: '2-digit',
+    minute: '2-digit',
     hour12: false,
 });
 
@@ -102,43 +111,58 @@ function getMexicoDateParam(date = new Date()): string {
     return `${year}-${month}-${day}`;
 }
 
-function getMexicoHour(date: Date): number {
-    const hourString = mexicoHourFormatter
-        .formatToParts(date)
-        .find(part => part.type === 'hour')?.value;
-    const hour = Number.parseInt(hourString ?? '0', 10);
-    return Number.isNaN(hour) ? 0 : hour;
+function getMexicoMinutesOfDay(date: Date): number {
+    const parts = mexicoTimePartsFormatter.formatToParts(date);
+    const hour = Number.parseInt(parts.find(part => part.type === 'hour')?.value ?? '0', 10);
+    const minute = Number.parseInt(parts.find(part => part.type === 'minute')?.value ?? '0', 10);
+
+    if (Number.isNaN(hour) || Number.isNaN(minute)) {
+        return 0;
+    }
+
+    return hour * 60 + minute;
 }
 
 function capitalizeFirst(text: string): string {
     return text.length === 0 ? text : text[0].toUpperCase() + text.slice(1);
 }
 
-function buildHourlyVisitSeries(attendances: AttendanceRecord[]): HourlyVisitPoint[] {
-    const byHour = Array.from(
-        { length: VISIT_CHART_END_HOUR - VISIT_CHART_START_HOUR + 1 },
+function formatHourMinuteLabel(minutesOfDay: number): string {
+    const hour = Math.floor(minutesOfDay / 60);
+    const minute = minutesOfDay % 60;
+    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+}
+
+function buildHalfHourVisitSeries(attendances: AttendanceRecord[]): VisitTimeSlotPoint[] {
+    const slots = Array.from(
+        {
+            length:
+                Math.floor((VISIT_CHART_END_MINUTES - VISIT_CHART_START_MINUTES) / VISIT_SLOT_MINUTES) + 1,
+        },
         (_, index) => {
-            const hour = VISIT_CHART_START_HOUR + index;
+            const minutesOfDay = VISIT_CHART_START_MINUTES + index * VISIT_SLOT_MINUTES;
             return {
-                hour,
+                minutesOfDay,
                 visits: 0,
-                label: `${hour.toString().padStart(2, '0')}:00`,
+                label: formatHourMinuteLabel(minutesOfDay),
             };
         }
     );
 
     attendances.forEach(attendance => {
-        const hour = getMexicoHour(new Date(attendance.check_in_time));
-        if (hour >= VISIT_CHART_START_HOUR && hour <= VISIT_CHART_END_HOUR) {
-            byHour[hour - VISIT_CHART_START_HOUR].visits += 1;
+        const checkInMinutes = getMexicoMinutesOfDay(new Date(attendance.check_in_time));
+        const bucketStart = Math.floor(checkInMinutes / VISIT_SLOT_MINUTES) * VISIT_SLOT_MINUTES;
+        if (bucketStart >= VISIT_CHART_START_MINUTES && bucketStart <= VISIT_CHART_END_MINUTES) {
+            const slotIndex = Math.floor((bucketStart - VISIT_CHART_START_MINUTES) / VISIT_SLOT_MINUTES);
+            slots[slotIndex].visits += 1;
         }
     });
 
-    return byHour;
+    return slots;
 }
 
-function clampVisitHour(hour: number): number {
-    return Math.min(VISIT_CHART_END_HOUR, Math.max(VISIT_CHART_START_HOUR, hour));
+function clampVisitMinutes(minutesOfDay: number): number {
+    return Math.min(VISIT_CHART_END_MINUTES, Math.max(VISIT_CHART_START_MINUTES, minutesOfDay));
 }
 
 /**
@@ -184,9 +208,29 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
         error: statsQueryError,
     } = useQuery({
         queryKey: ['visit-attendances', branchId, todayInMexico],
-        queryFn: () => apiCall<AttendanceRecord[]>(
-            `/api/v1/attendances?branch_id=${branchId}&attendance_date=${todayInMexico}&limit=200`
-        ),
+        queryFn: async () => {
+            const firstPage = await apiCall<AttendancePageResponse>(
+                `/api/v1/attendances/page?branch_id=${branchId}&attendance_date=${todayInMexico}&role=all&skip=0&limit=${VISIT_PAGE_SIZE}`
+            );
+
+            if (firstPage.total <= firstPage.items.length) {
+                return firstPage.items;
+            }
+
+            const totalPages = Math.ceil(firstPage.total / VISIT_PAGE_SIZE);
+            const nextPageRequests = Array.from({ length: totalPages - 1 }, (_, pageIndex) => {
+                const skip = (pageIndex + 1) * VISIT_PAGE_SIZE;
+                return apiCall<AttendancePageResponse>(
+                    `/api/v1/attendances/page?branch_id=${branchId}&attendance_date=${todayInMexico}&role=all&skip=${skip}&limit=${VISIT_PAGE_SIZE}`
+                );
+            });
+
+            const remainingPages = await Promise.all(nextPageRequests);
+            return [
+                ...firstPage.items,
+                ...remainingPages.flatMap(page => page.items),
+            ];
+        },
         enabled: !!branchId,
         refetchInterval: 60000,
     });
@@ -228,26 +272,40 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
         return () => window.clearInterval(timer);
     }, []);
 
-    const hourlyVisits = useMemo(() => buildHourlyVisitSeries(todayAttendances), [todayAttendances]);
-    const nowHourInMexico = useMemo(() => getMexicoHour(now), [now]);
-    const currentHourIndex = clampVisitHour(nowHourInMexico) - VISIT_CHART_START_HOUR;
-    const previousHourIndex = currentHourIndex > 0 ? currentHourIndex - 1 : currentHourIndex;
+    const halfHourVisits = useMemo(() => buildHalfHourVisitSeries(todayAttendances), [todayAttendances]);
+    const nowMinutesInMexico = useMemo(() => getMexicoMinutesOfDay(now), [now]);
+    const currentSlotStartMinutes =
+        Math.floor(clampVisitMinutes(nowMinutesInMexico) / VISIT_SLOT_MINUTES) * VISIT_SLOT_MINUTES;
+    const currentSlotIndex = Math.floor(
+        (currentSlotStartMinutes - VISIT_CHART_START_MINUTES) / VISIT_SLOT_MINUTES
+    );
+    const previousSlotIndex = currentSlotIndex > 0 ? currentSlotIndex - 1 : currentSlotIndex;
     const xLabelIndices = useMemo(() => {
-        const indices = [0, 6, 12, hourlyVisits.length - 1];
-        return Array.from(new Set(indices.filter(index => index >= 0 && index < hourlyVisits.length)));
-    }, [hourlyVisits]);
-    const totalVisitsToday = todayAttendances.length;
-    const currentHourVisits = hourlyVisits[currentHourIndex]?.visits ?? 0;
-    const previousHourVisits = hourlyVisits[previousHourIndex]?.visits ?? 0;
+        const everyThreeHoursInSlots = (3 * 60) / VISIT_SLOT_MINUTES;
+        const indices: number[] = [0];
 
-    const hourlyDelta = useMemo(() => {
-        if (previousHourVisits === 0) {
-            return currentHourVisits === 0 ? 0 : 100;
+        for (let index = everyThreeHoursInSlots; index < halfHourVisits.length; index += everyThreeHoursInSlots) {
+            indices.push(index);
         }
-        return Math.round(((currentHourVisits - previousHourVisits) / previousHourVisits) * 100);
-    }, [currentHourVisits, previousHourVisits]);
 
-    const trendDirection = hourlyDelta > 0 ? 'up' : hourlyDelta < 0 ? 'down' : 'flat';
+        indices.push(halfHourVisits.length - 1);
+        return Array.from(new Set(indices.filter(index => index >= 0 && index < halfHourVisits.length)));
+    }, [halfHourVisits]);
+    const totalVisitsToday = useMemo(
+        () => todayAttendances.filter(attendance => attendance.member_role !== 'employee').length,
+        [todayAttendances]
+    );
+    const currentSlotVisits = halfHourVisits[currentSlotIndex]?.visits ?? 0;
+    const previousSlotVisits = halfHourVisits[previousSlotIndex]?.visits ?? 0;
+
+    const slotDelta = useMemo(() => {
+        if (previousSlotVisits === 0) {
+            return currentSlotVisits === 0 ? 0 : 100;
+        }
+        return Math.round(((currentSlotVisits - previousSlotVisits) / previousSlotVisits) * 100);
+    }, [currentSlotVisits, previousSlotVisits]);
+
+    const trendDirection = slotDelta > 0 ? 'up' : slotDelta < 0 ? 'down' : 'flat';
     const TrendIcon = trendDirection === 'down'
         ? TrendingDown
         : trendDirection === 'flat'
@@ -255,28 +313,40 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
         : TrendingUp;
 
     const chartWidth = 330;
-    const chartHeight = 130;
-    const chartPaddingX = 10;
-    const chartPaddingY = 12;
-    const baselineY = chartHeight - chartPaddingY;
-    const elapsedPoints = clampVisitHour(nowHourInMexico) - VISIT_CHART_START_HOUR + 1;
-    const pointLimit = Math.min(hourlyVisits.length, Math.max(2, elapsedPoints));
-    const maxHourlyVisits = Math.max(1, ...hourlyVisits.map(point => point.visits));
-    const xStep = hourlyVisits.length > 1
-        ? (chartWidth - chartPaddingX * 2) / (hourlyVisits.length - 1)
+    const chartHeight = 140;
+    const chartPaddingLeft = 34;
+    const chartPaddingRight = 10;
+    const chartPaddingTop = 12;
+    const chartPaddingBottom = 14;
+    const baselineY = chartHeight - chartPaddingBottom;
+    const elapsedPoints = currentSlotIndex + 1;
+    const pointLimit = Math.min(halfHourVisits.length, Math.max(2, elapsedPoints));
+    const observedMaxSlotVisits = Math.max(0, ...halfHourVisits.map(point => point.visits));
+    const yTicks = observedMaxSlotVisits <= 3
+        ? Array.from({ length: Math.max(2, observedMaxSlotVisits + 1) }, (_, index) => index)
+        : (() => {
+            const yTickCount = 4;
+            const yTickStep = Math.max(1, Math.ceil(observedMaxSlotVisits / (yTickCount - 1)));
+            return Array.from({ length: yTickCount }, (_, index) => index * yTickStep);
+        })();
+    const yScaleMax = yTicks[yTicks.length - 1] || 1;
+    const xStep = halfHourVisits.length > 1
+        ? (chartWidth - chartPaddingLeft - chartPaddingRight) / (halfHourVisits.length - 1)
         : 0;
 
-    const chartPoints = hourlyVisits.map((point, index) => ({
+    const chartPoints = halfHourVisits.map((point, index) => ({
         ...point,
-        x: chartPaddingX + index * xStep,
-        y: baselineY - (point.visits / maxHourlyVisits) * (chartHeight - chartPaddingY * 2),
+        x: chartPaddingLeft + index * xStep,
+        y:
+            baselineY
+            - (point.visits / yScaleMax) * (chartHeight - chartPaddingTop - chartPaddingBottom),
     }));
 
     const renderedPoints = chartPoints.slice(0, pointLimit);
     const linePath = renderedPoints
         .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
         .join(' ');
-    const currentPoint = chartPoints[currentHourIndex] ?? chartPoints[0];
+    const currentPoint = chartPoints[currentSlotIndex] ?? chartPoints[0];
 
     const mexicoClock = useMemo(() => mexicoClockFormatter.format(now), [now]);
     const mexicoDateLabel = useMemo(
@@ -426,10 +496,10 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                             }`}>
                                 <TrendIcon size={12} />
                                 <span className="tabular-nums">
-                                    {hourlyDelta > 0 ? '+' : ''}
-                                    {hourlyDelta}%
+                                    {slotDelta > 0 ? '+' : ''}
+                                    {slotDelta}%
                                 </span>
-                                <span>vs hora anterior</span>
+                                <span>vs media hora anterior</span>
                             </div>
                         </div>
 
@@ -439,41 +509,76 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                                     viewBox={`0 0 ${chartWidth} ${chartHeight}`}
                                     className="w-full h-28"
                                     role="img"
-                                    aria-label="Gráfica de visitas por hora"
+                                    aria-label="Gráfica de visitas cada media hora"
                                 >
-                                    {[0.25, 0.5, 0.75].map(level => (
-                                        <line
-                                            key={level}
-                                            x1={chartPaddingX}
-                                            x2={chartWidth - chartPaddingX}
-                                            y1={chartPaddingY + (chartHeight - chartPaddingY * 2) * level}
-                                            y2={chartPaddingY + (chartHeight - chartPaddingY * 2) * level}
-                                            stroke="#CBD5E1"
-                                            strokeWidth="1"
-                                            strokeDasharray="4 4"
+                                    {yTicks.map((tickValue, index) => {
+                                        const y =
+                                            baselineY
+                                            - (tickValue / yScaleMax) * (chartHeight - chartPaddingTop - chartPaddingBottom);
+                                        return (
+                                            <g key={tickValue}>
+                                                <line
+                                                    x1={chartPaddingLeft}
+                                                    x2={chartWidth - chartPaddingRight}
+                                                    y1={y}
+                                                    y2={y}
+                                                    stroke="#CBD5E1"
+                                                    strokeWidth="1"
+                                                    strokeDasharray={index === 0 ? undefined : '4 4'}
+                                                />
+                                                <text
+                                                    x={chartPaddingLeft - 6}
+                                                    y={y + 3}
+                                                    textAnchor="end"
+                                                    fontSize="10"
+                                                    fill="#64748B"
+                                                >
+                                                    {tickValue}
+                                                </text>
+                                            </g>
+                                        );
+                                    })}
+                                    <line
+                                        x1={chartPaddingLeft}
+                                        x2={chartPaddingLeft}
+                                        y1={chartPaddingTop}
+                                        y2={baselineY}
+                                        stroke="#CBD5E1"
+                                        strokeWidth="1"
+                                    />
+                                    <line
+                                        x1={chartPaddingLeft}
+                                        x2={chartWidth - chartPaddingRight}
+                                        y1={baselineY}
+                                        y2={baselineY}
+                                        stroke="#CBD5E1"
+                                        strokeWidth="1"
+                                    />
+                                    {renderedPoints.length > 0 && (
+                                        <path
+                                            d={linePath}
+                                            fill="none"
+                                            stroke="#10B981"
+                                            strokeWidth="3"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
                                         />
-                                    ))}
-                                    <path
-                                        d={linePath}
-                                        fill="none"
-                                        stroke="#10B981"
-                                        strokeWidth="3"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    />
-                                    <circle
-                                        cx={currentPoint.x}
-                                        cy={currentPoint.y}
-                                        r="4"
-                                        fill="#10B981"
-                                        stroke="white"
-                                        strokeWidth="2"
-                                    />
+                                    )}
+                                    {currentPoint && (
+                                        <circle
+                                            cx={currentPoint.x}
+                                            cy={currentPoint.y}
+                                            r="4"
+                                            fill="#10B981"
+                                            stroke="white"
+                                            strokeWidth="2"
+                                        />
+                                    )}
                                 </svg>
 
                                 <div className="mt-1 flex items-center justify-between text-[11px] font-medium text-slate-400">
                                     {xLabelIndices.map(index => (
-                                        <span key={hourlyVisits[index].label}>{hourlyVisits[index].label}</span>
+                                        <span key={halfHourVisits[index].label}>{halfHourVisits[index].label}</span>
                                     ))}
                                 </div>
                             </div>

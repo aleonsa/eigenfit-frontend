@@ -53,6 +53,13 @@ const mexicoDatePartsFormatter = new Intl.DateTimeFormat('en-US', {
     day: '2-digit',
 });
 
+const mexicoTimeFormatter = new Intl.DateTimeFormat('es-MX', {
+    timeZone: MEXICO_CITY_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+});
+
 const getMexicoDateParam = (date = new Date()): string => {
     const parts = mexicoDatePartsFormatter.formatToParts(date);
     const year = parts.find(part => part.type === 'year')?.value ?? '0000';
@@ -64,7 +71,7 @@ const getMexicoDateParam = (date = new Date()): string => {
 const formatTime = (iso: string | null): string => {
     if (!iso) return '';
     const d = new Date(iso);
-    return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return mexicoTimeFormatter.format(d);
 };
 
 const getInitials = (name: string): string =>
