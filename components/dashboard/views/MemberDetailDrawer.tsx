@@ -38,6 +38,12 @@ interface MemberMembership {
     is_active: boolean;
 }
 
+interface MemberAttendance {
+    id: string;
+    check_in_time: string;
+    check_out_time: string | null;
+}
+
 interface MemberDetailDrawerProps {
     isOpen: boolean;
     onClose: () => void;
@@ -51,6 +57,29 @@ const formatCurrency = (value: number) =>
 
 const formatDate = (value: string) =>
     new Date(value).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+
+const formatVisitDate = (isoString: string): string => {
+    const date = new Date(isoString);
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('es-MX');
+    const visitDateStr = date.toLocaleDateString('es-MX');
+    if (visitDateStr === todayStr) return 'Hoy';
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (visitDateStr === yesterday.toLocaleDateString('es-MX')) return 'Ayer';
+    return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const formatVisitTime = (isoString: string): string =>
+    new Date(isoString).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+
+const formatDuration = (checkIn: string, checkOut: string): string => {
+    const mins = Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 60000);
+    if (mins < 60) return `${mins} min`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m > 0 ? `${h}h ${m}min` : `${h}h`;
+};
 
 const dateInputValue = (date: Date) => {
     const year = date.getFullYear();
@@ -70,6 +99,7 @@ export const MemberDetailDrawer: React.FC<MemberDetailDrawerProps> = ({
 
     const [memberships, setMemberships] = useState<MemberMembership[]>([]);
     const [plans, setPlans] = useState<MembershipPlan[]>([]);
+    const [attendances, setAttendances] = useState<MemberAttendance[]>([]);
     const [loadingMemberships, setLoadingMemberships] = useState(false);
     const [savingRenewal, setSavingRenewal] = useState(false);
     const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
@@ -86,16 +116,19 @@ export const MemberDetailDrawer: React.FC<MemberDetailDrawerProps> = ({
 
         setLoadingMemberships(true);
         try {
-            const [memberMemberships, branchPlans] = await Promise.all([
+            const [memberMemberships, branchPlans, memberAttendances] = await Promise.all([
                 apiCall<MemberMembership[]>(`/api/v1/members/${member.id}/memberships`),
                 apiCall<MembershipPlan[]>(`/api/v1/membership-plans?branch_id=${member.branch_id}`),
+                apiCall<MemberAttendance[]>(`/api/v1/members/${member.id}/attendances?limit=20`),
             ]);
             setMemberships(memberMemberships);
             setPlans(branchPlans);
+            setAttendances(memberAttendances);
         } catch (error) {
             console.error('Error loading member detail:', error);
             setMemberships([]);
             setPlans([]);
+            setAttendances([]);
         } finally {
             setLoadingMemberships(false);
         }
@@ -277,17 +310,34 @@ export const MemberDetailDrawer: React.FC<MemberDetailDrawerProps> = ({
                             <Clock size={18} className="text-slate-400" />
                             Historial de Visitas
                         </h4>
-                        <div className="relative pl-4 space-y-6 before:absolute before:left-0 before:top-2 before:bottom-0 before:w-0.5 before:bg-slate-100">
-                            {[1, 2, 3].map((_, i) => (
-                                <div key={i} className="relative">
-                                    <div className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-slate-200 border-2 border-white"></div>
-                                    <div className="text-sm">
-                                        <p className="font-medium text-slate-900">Check-in: Gimnasio</p>
-                                        <p className="text-xs text-slate-500">Hoy, 10:30 AM</p>
+                        {loadingMemberships && (
+                            <p className="text-sm text-slate-400 pl-4">Cargando visitas...</p>
+                        )}
+                        {!loadingMemberships && attendances.length === 0 && (
+                            <p className="text-sm text-slate-400 pl-4">Sin visitas registradas</p>
+                        )}
+                        {!loadingMemberships && attendances.length > 0 && (
+                            <div className="relative pl-4 space-y-6 before:absolute before:left-0 before:top-2 before:bottom-0 before:w-0.5 before:bg-slate-100">
+                                {attendances.map((attendance) => (
+                                    <div key={attendance.id} className="relative">
+                                        <div className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-slate-200 border-2 border-white"></div>
+                                        <div className="text-sm">
+                                            <p className="font-medium text-slate-900">
+                                                {formatVisitDate(attendance.check_in_time)}, {formatVisitTime(attendance.check_in_time)}
+                                                {attendance.check_out_time && (
+                                                    <span className="text-slate-400 font-normal">
+                                                        {' '}· {formatDuration(attendance.check_in_time, attendance.check_out_time)}
+                                                    </span>
+                                                )}
+                                            </p>
+                                            {!attendance.check_out_time && (
+                                                <p className="text-xs text-emerald-600">En curso</p>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </Drawer>

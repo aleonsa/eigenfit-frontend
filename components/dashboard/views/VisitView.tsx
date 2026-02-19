@@ -635,20 +635,28 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                     />
                     <div className="relative w-full max-w-sm animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
                         <div className={`rounded-2xl border shadow-xl overflow-hidden ${
-                            feedback.type === 'in'
+                            feedback.type === 'in' && feedback.memberType === 'member' && feedback.isActiveMembership === false
+                                ? 'bg-gradient-to-b from-red-100 to-red-50 border-red-300'
+                                : feedback.type === 'in'
                                 ? 'bg-gradient-to-b from-green-50 to-white border-green-200'
                                 : 'bg-gradient-to-b from-orange-50 to-white border-orange-200'
                         }`}>
                             <div className="pt-8 pb-6 text-center">
                                 <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
-                                    feedback.type === 'in'
+                                    feedback.type === 'in' && feedback.memberType === 'member' && feedback.isActiveMembership === false
+                                        ? 'bg-red-200 text-red-700'
+                                        : feedback.type === 'in'
                                         ? 'bg-green-100 text-green-600'
                                         : 'bg-orange-100 text-orange-600'
                                 }`}>
                                     {feedback.type === 'in' ? <LogIn size={32} /> : <LogOut size={32} />}
                                 </div>
                                 <h2 className={`text-2xl font-bold ${
-                                    feedback.type === 'in' ? 'text-green-700' : 'text-orange-700'
+                                    feedback.type === 'in' && feedback.memberType === 'member' && feedback.isActiveMembership === false
+                                        ? 'text-red-700'
+                                        : feedback.type === 'in'
+                                        ? 'text-green-700'
+                                        : 'text-orange-700'
                                 }`}>
                                     {feedback.type === 'in' ? '¡Bienvenido!' : '¡Hasta Luego!'}
                                 </h2>
@@ -663,22 +671,22 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                                             <div className={`rounded-xl border p-4 ${
                                                 feedback.isActiveMembership
                                                     ? 'bg-emerald-50 border-emerald-200'
-                                                    : 'bg-amber-50 border-amber-200'
+                                                    : 'bg-red-50 border-red-200'
                                             }`}>
                                                 <div className="flex items-center gap-2">
                                                     {feedback.isActiveMembership ? (
                                                         <CheckCircle size={16} className="text-emerald-600" />
                                                     ) : (
-                                                        <AlertTriangle size={16} className="text-amber-600" />
+                                                        <AlertTriangle size={16} className="text-red-600" />
                                                     )}
                                                     <p className={`text-sm font-semibold ${
-                                                        feedback.isActiveMembership ? 'text-emerald-700' : 'text-amber-700'
+                                                        feedback.isActiveMembership ? 'text-emerald-700' : 'text-red-700'
                                                     }`}>
                                                         {feedback.isActiveMembership ? 'Membresia activa' : 'Membresia inactiva'}
                                                     </p>
                                                 </div>
                                                 {!feedback.isActiveMembership && (
-                                                    <p className="mt-2 text-sm text-amber-700">
+                                                    <p className="mt-2 text-sm font-bold text-red-700">
                                                         Acercate a recepcion para renovar tu membresia.
                                                     </p>
                                                 )}
@@ -714,7 +722,13 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
 
                             <div className="h-1 bg-slate-100">
                                 <div
-                                    className={`h-full ${feedback.type === 'in' ? 'bg-green-400' : 'bg-orange-400'}`}
+                                    className={`h-full ${
+                                        feedback.type === 'in' && feedback.memberType === 'member' && feedback.isActiveMembership === false
+                                            ? 'bg-red-500'
+                                            : feedback.type === 'in'
+                                            ? 'bg-green-400'
+                                            : 'bg-orange-400'
+                                    }`}
                                     style={{ animation: 'shrink-width 4s linear forwards' }}
                                 />
                             </div>
