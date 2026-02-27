@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { DataTable, Column } from '../../ui/DataTable';
 import { useApi } from '../../../hooks/useApi';
+import { MemberDetailDrawer } from './MemberDetailDrawer';
 
 interface AttendanceRecord {
     id: string;
@@ -27,8 +28,24 @@ interface MemberRecord {
     role: string;
 }
 
+interface Member {
+    id: string;
+    branch_id: string;
+    code: number;
+    role: string;
+    full_name: string;
+    email: string;
+    phone: string | null;
+    created_at: string;
+    memberships: string[];
+    is_active: boolean;
+    last_payment_date: string | null;
+    due_date: string | null;
+}
+
 interface CheckInRow {
     id: string;
+    member_id: string;
     displayCode: string;
     name: string;
     initials: string;
@@ -80,52 +97,6 @@ const getInitials = (name: string): string =>
 const formatCode = (code: number, role: string): string =>
     role === 'employee' ? `E-${code}` : String(code);
 
-const columns: Column<CheckInRow>[] = [
-    {
-        header: 'ID',
-        cell: (row) => (
-            <span className="font-mono font-semibold text-slate-700">{row.displayCode}</span>
-        ),
-        className: 'w-20'
-    },
-    {
-        header: 'Nombre',
-        cell: (row) => (
-            <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white
-                    ${row.status === 'Activo' ? 'bg-green-500' : 'bg-slate-400'}`}>
-                    {row.initials}
-                </div>
-                <span className="font-medium text-slate-900">{row.name}</span>
-            </div>
-        )
-    },
-    { header: 'Entrada', accessorKey: 'checkIn' },
-    { header: 'Salida', accessorKey: 'checkOut' },
-    {
-        header: 'Estado',
-        cell: (row) => {
-            if (row.type === 'E') {
-                return null;
-            }
-            return (
-                <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium
-                    ${row.status === 'Activo' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {row.status}
-                </span>
-            );
-        }
-    },
-    {
-        header: 'Tipo',
-        cell: (row) => (
-            <span className={`inline-flex w-6 h-6 items-center justify-center rounded text-xs font-bold
-                ${row.type === 'E' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                {row.type}
-            </span>
-        )
-    }
-];
 
 const filterButtons: { value: TypeFilter; label: string }[] = [
     { value: 'all', label: 'Todos' },
@@ -139,6 +110,67 @@ export const HomeView: React.FC<HomeViewProps> = ({ branchId }) => {
     const { apiCall } = useApi();
     const [page, setPage] = useState(0);
     const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+    const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+    const handleRowClick = async (row: CheckInRow) => {
+        if (row.type !== 'M') return;
+        try {
+            const member = await apiCall<Member>(`/api/v1/members/${row.member_id}`);
+            setSelectedMember(member);
+            setIsDrawerOpen(true);
+        } catch (err) {
+            console.error('Error fetching member:', err);
+        }
+    };
+
+    const columns: Column<CheckInRow>[] = [
+        {
+            header: 'ID',
+            cell: (row) => (
+                <span className="font-mono font-semibold text-slate-700">{row.displayCode}</span>
+            ),
+            className: 'w-20'
+        },
+        {
+            header: 'Nombre',
+            cell: (row) => (
+                <div
+                    className={`flex items-center gap-3 ${row.type === 'M' ? 'cursor-pointer hover:opacity-70' : ''}`}
+                    onClick={() => handleRowClick(row)}
+                >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white
+                        ${row.status === 'Activo' ? 'bg-green-500' : 'bg-slate-400'}`}>
+                        {row.initials}
+                    </div>
+                    <span className={`font-medium text-slate-900 ${row.type === 'M' ? 'hover:text-blue-600 hover:underline' : ''}`}>{row.name}</span>
+                </div>
+            )
+        },
+        { header: 'Entrada', accessorKey: 'checkIn' },
+        { header: 'Salida', accessorKey: 'checkOut' },
+        {
+            header: 'Estado',
+            cell: (row) => {
+                if (row.type === 'E') return null;
+                return (
+                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium
+                        ${row.status === 'Activo' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {row.status}
+                    </span>
+                );
+            }
+        },
+        {
+            header: 'Tipo',
+            cell: (row) => (
+                <span className={`inline-flex w-6 h-6 items-center justify-center rounded text-xs font-bold
+                    ${row.type === 'E' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {row.type}
+                </span>
+            )
+        }
+    ];
 
     useEffect(() => {
         setPage(0);
@@ -168,6 +200,7 @@ export const HomeView: React.FC<HomeViewProps> = ({ branchId }) => {
                     : (hasActiveMembership ? 'Activo' : 'Inactivo');
                 return {
                     id: a.id,
+                    member_id: a.member_id,
                     displayCode: formatCode(code, memberRole),
                     name,
                     initials: getInitials(name),
@@ -194,6 +227,12 @@ export const HomeView: React.FC<HomeViewProps> = ({ branchId }) => {
     const totalMembers = data?.totalMembers ?? null;
 
     return (
+        <>
+        <MemberDetailDrawer
+            isOpen={isDrawerOpen}
+            onClose={() => setIsDrawerOpen(false)}
+            member={selectedMember}
+        />
         <div className="space-y-8 animate-in fade-in duration-500">
             {/* Stats Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -242,5 +281,6 @@ export const HomeView: React.FC<HomeViewProps> = ({ branchId }) => {
                 }}
             />
         </div>
+        </>
     );
 };
