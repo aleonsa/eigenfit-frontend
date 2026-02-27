@@ -56,7 +56,12 @@ const formatCurrency = (value: number) =>
     new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 2 }).format(value);
 
 const formatDate = (value: string) =>
-    new Date(value).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+    new Intl.DateTimeFormat('es-MX', {
+        timeZone: 'America/Mexico_City',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    }).format(new Date(value));
 
 const MX_TZ = 'America/Mexico_City';
 
@@ -287,20 +292,40 @@ export const MemberDetailDrawer: React.FC<MemberDetailDrawerProps> = ({
                     <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
                         <h4 className="font-semibold text-slate-900 flex items-center gap-2 mb-3">
                             <CreditCard size={18} className="text-blue-500" />
-                            Membresía Actual
+                            Membresías
                         </h4>
                         {loadingMemberships && <p className="text-sm text-slate-400">Cargando membresías...</p>}
-                        {!loadingMemberships && activeMemberships.length === 0 && (
-                            <p className="text-sm text-slate-400">Sin membresía activa</p>
+                        {!loadingMemberships && memberships.length === 0 && (
+                            <p className="text-sm text-slate-400">Sin membresías registradas</p>
                         )}
-                        {!loadingMemberships && activeMemberships.length > 0 && (
+                        {!loadingMemberships && memberships.length > 0 && (
                             <div className="space-y-2">
-                                {activeMemberships.map((membership) => (
-                                    <div key={membership.id} className="flex items-center justify-between text-sm">
-                                        <p className="font-medium text-slate-800">{membership.membership_plan_name}</p>
-                                        <p className="text-slate-500">Vence: {formatDate(membership.due_date)}</p>
-                                    </div>
-                                ))}
+                                {[...memberships]
+                                    .sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime())
+                                    .map((membership) => (
+                                        <div key={membership.id} className="bg-white rounded-lg border border-slate-200 p-3">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <p className="font-medium text-slate-800 text-sm">{membership.membership_plan_name}</p>
+                                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                                    membership.is_active
+                                                        ? 'bg-green-50 text-green-700 border border-green-200'
+                                                        : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                                }`}>
+                                                    {membership.is_active ? 'Activo' : 'Vencido'}
+                                                </span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <p className="text-xs text-slate-400">Fecha de pago</p>
+                                                    <p className="text-xs text-slate-700 font-medium">{formatDate(membership.start_date)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-slate-400">Vencimiento</p>
+                                                    <p className="text-xs text-slate-700 font-medium">{formatDate(membership.due_date)}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                             </div>
                         )}
                     </div>

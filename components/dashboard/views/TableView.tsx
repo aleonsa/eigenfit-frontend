@@ -22,6 +22,8 @@ interface MemberRow {
     created_at: string;
     memberships: string[];
     is_active: boolean;
+    last_payment_date: string | null;
+    due_date: string | null;
 }
 
 const formatCode = (code: number, role: string): string =>
@@ -161,6 +163,16 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
         }
     };
 
+    const formatShortDate = (value: string | null) => {
+        if (!value) return '—';
+        return new Intl.DateTimeFormat('es-MX', {
+            timeZone: 'America/Mexico_City',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+        }).format(new Date(value));
+    };
+
     const columns: Column<MemberRow>[] = [
         {
             header: 'ID',
@@ -181,14 +193,16 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
                         <>
                             <br />
                             <span className="text-sm text-slate-500">{row.email}</span>
+                            {row.phone && (
+                                <>
+                                    <br />
+                                    <span className="text-xs text-slate-400">{row.phone}</span>
+                                </>
+                            )}
                         </>
                     )}
                 </button>
             ),
-        },
-        {
-            header: 'Teléfono',
-            cell: (row) => <span className="text-slate-400">{row.phone || '—'}</span>,
         },
         ...(type === 'member'
             ? [{
@@ -207,14 +221,22 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
                 </span>
             ),
         },
-        {
-            header: 'Fecha Registro',
-            cell: (row) => (
-                <span className="text-slate-400">
-                    {new Date(row.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
-                </span>
-            ),
-        },
+        ...(type === 'member'
+            ? [
+                {
+                    header: 'Último Pago',
+                    cell: (row: MemberRow) => (
+                        <span className="text-slate-500">{formatShortDate(row.last_payment_date)}</span>
+                    ),
+                },
+                {
+                    header: 'Vencimiento',
+                    cell: (row: MemberRow) => (
+                        <span className="text-slate-500">{formatShortDate(row.due_date)}</span>
+                    ),
+                },
+            ]
+            : []),
         {
             header: '',
             cell: (row) => (
