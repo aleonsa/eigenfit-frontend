@@ -243,7 +243,9 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
             ];
         },
         enabled: !!branchId,
-        refetchInterval: 60000,
+        // Check-ins invalidate this query directly; polling is only a fallback
+        // to pick up check-ins made from other devices (kiosk).
+        refetchInterval: 5 * 60 * 1000,
     });
     const statsError = statsQueryError ? 'No se pudieron cargar las visitas del día.' : '';
 
@@ -266,7 +268,7 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
             }));
         },
         enabled: !!branchId,
-        refetchInterval: 60000,
+        refetchInterval: 15 * 60 * 1000,
     });
     const streakItems: StreakLeaderboardItem[] = streakData ?? [];
     const streakError = streakQueryError ? 'No se pudo cargar la racha histórica.' : '';
