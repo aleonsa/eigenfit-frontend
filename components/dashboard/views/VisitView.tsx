@@ -47,9 +47,14 @@ interface StreakLeaderboardResponse {
     items: StreakLeaderboardItemRecord[];
 }
 
-interface AttendancePageResponse {
-    items: AttendanceRecord[];
-    total: number;
+interface AttendanceTimeBucket {
+    start_minutes: number;
+    visits: number;
+}
+
+interface DailyAttendanceStatsResponse {
+    member_visits: number;
+    buckets: AttendanceTimeBucket[];
 }
 
 interface MemberStreakResponse {
@@ -81,7 +86,6 @@ const MEXICO_CITY_TIMEZONE = 'America/Mexico_City';
 const VISIT_CHART_START_MINUTES = 5 * 60;
 const VISIT_CHART_END_MINUTES = 23 * 60;
 const VISIT_SLOT_MINUTES = 30;
-const VISIT_PAGE_SIZE = 200;
 
 const mexicoDatePartsFormatter = new Intl.DateTimeFormat('en-US', {
     timeZone: MEXICO_CITY_TIMEZONE,
@@ -144,7 +148,10 @@ function formatHourMinuteLabel(minutesOfDay: number): string {
     return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
 }
 
-function buildHalfHourVisitSeries(attendances: AttendanceRecord[]): VisitTimeSlotPoint[] {
+function buildHalfHourVisitSeries(buckets: AttendanceTimeBucket[]): VisitTimeSlotPoint[] {
+    const visitsByStartMinutes = new Map(
+        buckets.map(bucket => [bucket.start_minutes, bucket.visits])
+    );
     const slots = Array.from(
         {
             length:
@@ -154,20 +161,11 @@ function buildHalfHourVisitSeries(attendances: AttendanceRecord[]): VisitTimeSlo
             const minutesOfDay = VISIT_CHART_START_MINUTES + index * VISIT_SLOT_MINUTES;
             return {
                 minutesOfDay,
-                visits: 0,
+                visits: visitsByStartMinutes.get(minutesOfDay) ?? 0,
                 label: formatHourMinuteLabel(minutesOfDay),
             };
         }
     );
-
-    attendances.forEach(attendance => {
-        const checkInMinutes = getMexicoMinutesOfDay(new Date(attendance.check_in_time));
-        const bucketStart = Math.floor(checkInMinutes / VISIT_SLOT_MINUTES) * VISIT_SLOT_MINUTES;
-        if (bucketStart >= VISIT_CHART_START_MINUTES && bucketStart <= VISIT_CHART_END_MINUTES) {
-            const slotIndex = Math.floor((bucketStart - VISIT_CHART_START_MINUTES) / VISIT_SLOT_MINUTES);
-            slots[slotIndex].visits += 1;
-        }
-    });
 
     return slots;
 }
@@ -214,34 +212,14 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
     const todayInMexico = getMexicoDateParam();
 
     const {
-        data: todayAttendances = [],
+        data: dailyStats,
         isLoading: statsLoading,
         error: statsQueryError,
     } = useQuery({
         queryKey: ['visit-attendances', branchId, todayInMexico],
-        queryFn: async () => {
-            const firstPage = await apiCall<AttendancePageResponse>(
-                `/api/v1/attendances/page?branch_id=${branchId}&attendance_date=${todayInMexico}&role=all&skip=0&limit=${VISIT_PAGE_SIZE}`
-            );
-
-            if (firstPage.total <= firstPage.items.length) {
-                return firstPage.items;
-            }
-
-            const totalPages = Math.ceil(firstPage.total / VISIT_PAGE_SIZE);
-            const nextPageRequests = Array.from({ length: totalPages - 1 }, (_, pageIndex) => {
-                const skip = (pageIndex + 1) * VISIT_PAGE_SIZE;
-                return apiCall<AttendancePageResponse>(
-                    `/api/v1/attendances/page?branch_id=${branchId}&attendance_date=${todayInMexico}&role=all&skip=${skip}&limit=${VISIT_PAGE_SIZE}`
-                );
-            });
-
-            const remainingPages = await Promise.all(nextPageRequests);
-            return [
-                ...firstPage.items,
-                ...remainingPages.flatMap(page => page.items),
-            ];
-        },
+        queryFn: () => apiCall<DailyAttendanceStatsResponse>(
+            `/api/v1/attendances/daily-stats?branch_id=${branchId}&attendance_date=${todayInMexico}`
+        ),
         enabled: !!branchId,
         // Check-ins invalidate this query directly; polling is only a fallback
         // to pick up check-ins made from other devices (kiosk).
@@ -285,7 +263,10 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
         return () => window.clearInterval(timer);
     }, []);
 
-    const halfHourVisits = useMemo(() => buildHalfHourVisitSeries(todayAttendances), [todayAttendances]);
+    const halfHourVisits = useMemo(
+        () => buildHalfHourVisitSeries(dailyStats?.buckets ?? []),
+        [dailyStats]
+    );
     const nowMinutesInMexico = useMemo(() => getMexicoMinutesOfDay(now), [now]);
     const currentSlotStartMinutes =
         Math.floor(clampVisitMinutes(nowMinutesInMexico) / VISIT_SLOT_MINUTES) * VISIT_SLOT_MINUTES;
@@ -304,10 +285,7 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
         indices.push(halfHourVisits.length - 1);
         return Array.from(new Set(indices.filter(index => index >= 0 && index < halfHourVisits.length)));
     }, [halfHourVisits]);
-    const totalVisitsToday = useMemo(
-        () => todayAttendances.filter(attendance => attendance.member_role !== 'employee').length,
-        [todayAttendances]
-    );
+    const totalVisitsToday = dailyStats?.member_visits ?? 0;
     const currentSlotVisits = halfHourVisits[currentSlotIndex]?.visits ?? 0;
     const previousSlotVisits = halfHourVisits[previousSlotIndex]?.visits ?? 0;
 
