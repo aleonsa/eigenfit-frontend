@@ -17,23 +17,6 @@ import { Button } from '../../ui/Button';
 import { StreakLeaderboard, type StreakLeaderboardItem } from './visit/StreakLeaderboard';
 import { useApi } from '../../../hooks/useApi';
 
-interface MemberRecord {
-    id: string;
-    code: number;
-    role: string;
-    full_name: string;
-    is_active?: boolean;
-}
-
-interface AttendanceRecord {
-    id: string;
-    member_id: string;
-    branch_id: string;
-    check_in_time: string;
-    check_out_time: string | null;
-    member_role?: string | null;
-}
-
 interface StreakLeaderboardItemRecord {
     member_id: string;
     member_name: string;
@@ -57,9 +40,19 @@ interface DailyAttendanceStatsResponse {
     buckets: AttendanceTimeBucket[];
 }
 
-interface MemberStreakResponse {
+interface AttendanceScanResponse {
+    action: 'check_in' | 'check_out';
+    attendance_id: string;
+    check_in_time: string;
+    check_out_time: string | null;
     member_id: string;
+    member_name: string;
+    member_code: number;
+    member_role: 'member' | 'employee';
+    member_has_active_membership: boolean | null;
     streak_days: number;
+    stats_date: string;
+    daily_stats: DailyAttendanceStatsResponse;
 }
 
 interface VisitTimeSlotPoint {
@@ -179,7 +172,7 @@ function clampVisitMinutes(minutesOfDay: number): number {
  * "E-5" → { role: 'employee', code: 5 }
  * "310" → { role: 'member', code: 310 }
  */
-function parseCodeInput(input: string): { role: string; code: number } | null {
+function parseCodeInput(input: string): { role: 'member' | 'employee'; code: number } | null {
     const trimmed = input.trim().toUpperCase();
     if (trimmed.startsWith('E-')) {
         const num = parseInt(trimmed.slice(2), 10);
@@ -221,8 +214,7 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
             `/api/v1/attendances/daily-stats?branch_id=${branchId}&attendance_date=${todayInMexico}`
         ),
         enabled: !!branchId,
-        // Check-ins invalidate this query directly; polling is only a fallback
-        // to pick up check-ins made from other devices (kiosk).
+        // Local scans update this cache directly; polling picks up other devices.
         refetchInterval: 5 * 60 * 1000,
     });
     const statsError = statsQueryError ? 'No se pudieron cargar las visitas del día.' : '';
@@ -250,11 +242,6 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
     });
     const streakItems: StreakLeaderboardItem[] = streakData ?? [];
     const streakError = streakQueryError ? 'No se pudo cargar la racha histórica.' : '';
-
-    const invalidateVisitData = useCallback(() => {
-        queryClient.invalidateQueries({ queryKey: ['visit-attendances', branchId] });
-        queryClient.invalidateQueries({ queryKey: ['visit-streaks', branchId] });
-    }, [queryClient, branchId]);
 
     useEffect(() => {
         const timer = window.setInterval(() => {
@@ -360,92 +347,43 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
         setIdInput('');
 
         try {
-            // 1. Look up member by code + role + branch
-            const endpoint = parsed.role === 'employee' ? 'employees' : 'members';
-            const membersPage = await apiCall<{ items: MemberRecord[]; total: number }>(
-                `/api/v1/${endpoint}?branch_id=${branchId}&search=${parsed.code}&limit=10`
-            );
-
-            const member = membersPage.items.find(m => m.code === parsed.code);
-            if (!member) {
-                setError(`No se encontró ${parsed.role === 'employee' ? 'empleado' : 'miembro'} con ID ${parsed.role === 'employee' ? 'E-' : ''}${parsed.code}.`);
-                setTimeout(() => setError(''), 4000);
-                return;
-            }
-
-            const memberType: 'member' | 'employee' = parsed.role === 'employee' ? 'employee' : 'member';
-            const isActiveMembership = memberType === 'member' ? (member.is_active ?? false) : null;
-            const displayCode = parsed.role === 'employee' ? `E-${parsed.code}` : String(parsed.code);
-
-            // 2. Check if already checked in
-            const currentAttendances = await apiCall<AttendanceRecord[]>(
-                `/api/v1/attendances/current?branch_id=${branchId}`
-            );
-
-            const activeAttendance = currentAttendances.find(a => a.member_id === member.id);
-
-            if (activeAttendance) {
-                // Check out
-                await apiCall(`/api/v1/attendances/${activeAttendance.id}/check-out`, {
-                    method: 'POST',
-                    body: JSON.stringify({}),
-                });
-
-                let streakDays: number | null = null;
-                if (memberType === 'member') {
-                    try {
-                        const streak = await apiCall<MemberStreakResponse>(
-                            `/api/v1/attendances/member-streak?branch_id=${branchId}&member_id=${member.id}`
-                        );
-                        streakDays = streak.streak_days;
-                    } catch (streakError) {
-                        console.error('Error loading member streak:', streakError);
-                    }
-                }
-
-                await invalidateVisitData();
-                showFeedback({
-                    type: 'out',
-                    memberName: member.full_name,
-                    code: displayCode,
-                    memberType,
-                    streakDays,
-                });
-            } else {
-                // Check in
-                await apiCall('/api/v1/attendances/check-in', {
+            const statsKeyPrefix = ['visit-attendances', branchId];
+            await queryClient.cancelQueries({ queryKey: statsKeyPrefix });
+            const scan = await apiCall<AttendanceScanResponse>(
+                `/api/v1/attendances/scan?branch_id=${branchId}`,
+                {
                     method: 'POST',
                     body: JSON.stringify({
-                        branch_id: branchId,
-                        member_id: member.id,
+                        role: parsed.role,
+                        code: parsed.code,
                     }),
-                });
-
-                let streakDays: number | null = null;
-                if (memberType === 'member') {
-                    try {
-                        const streak = await apiCall<MemberStreakResponse>(
-                            `/api/v1/attendances/member-streak?branch_id=${branchId}&member_id=${member.id}`
-                        );
-                        streakDays = streak.streak_days;
-                    } catch (streakError) {
-                        console.error('Error loading member streak:', streakError);
-                    }
                 }
+            );
+            const displayCode = scan.member_role === 'employee'
+                ? `E-${scan.member_code}`
+                : String(scan.member_code);
+            await queryClient.cancelQueries({ queryKey: statsKeyPrefix });
+            queryClient.setQueryData<DailyAttendanceStatsResponse>(
+                ['visit-attendances', branchId, scan.stats_date],
+                scan.daily_stats
+            );
 
-                await invalidateVisitData();
-                showFeedback({
-                    type: 'in',
-                    memberName: member.full_name,
-                    code: displayCode,
-                    memberType,
-                    isActiveMembership,
-                    streakDays,
-                });
-            }
-        } catch (err: any) {
+            showFeedback({
+                type: scan.action === 'check_in' ? 'in' : 'out',
+                memberName: scan.member_name,
+                code: displayCode,
+                memberType: scan.member_role,
+                isActiveMembership: scan.member_has_active_membership,
+                streakDays: scan.member_role === 'member' ? scan.streak_days : null,
+            });
+        } catch (err: unknown) {
             console.error('Error during check-in/out:', err);
-            setError(`Error: ${err.message}`);
+            void queryClient.invalidateQueries({ queryKey: ['visit-attendances', branchId] });
+            const message = err instanceof Error ? err.message : '';
+            const notFoundMessage = parsed.role === 'employee'
+                ? `No se encontró empleado con ID E-${parsed.code}.`
+                : `No se encontró miembro con ID ${parsed.code}.`;
+            setError(message.includes('404') ? notFoundMessage : 'No se pudo registrar la visita. Intenta nuevamente.');
             setTimeout(() => setError(''), 4000);
         } finally {
             setProcessing(false);
