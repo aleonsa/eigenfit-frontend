@@ -367,6 +367,7 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                 ['visit-attendances', branchId, scan.stats_date],
                 scan.daily_stats
             );
+            void queryClient.invalidateQueries({ queryKey: ['home', branchId] });
 
             showFeedback({
                 type: scan.action === 'check_in' ? 'in' : 'out',
