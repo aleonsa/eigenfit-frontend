@@ -16,6 +16,7 @@ interface MemberRow {
     branch_id: string;
     code: number;
     role: string;
+    is_coach?: boolean;
     full_name: string;
     email: string;
     phone: string | null;
@@ -38,11 +39,12 @@ interface TableViewProps {
     title: string;
     type: 'member' | 'employee';
     branchId: string;
+    timezone?: string;
 }
 
 const PAGE_SIZE = 20;
 
-export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) => {
+export const TableView: React.FC<TableViewProps> = ({ title, type, branchId, timezone }) => {
     const { apiCall } = useApi();
     const queryClient = useQueryClient();
     const [page, setPage] = useState(0);
@@ -56,6 +58,7 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingMember, setEditingMember] = useState<MemberRow | null>(null);
     const [formData, setFormData] = useState({ full_name: '', email: '', phone: '' });
+    const [isCoach, setIsCoach] = useState(false);
     const [saving, setSaving] = useState(false);
 
     const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
@@ -82,7 +85,12 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
     const members = data?.items ?? [];
     const total = data?.total ?? 0;
 
-    const invalidateTable = () => queryClient.invalidateQueries({ queryKey: ['table', type, branchId] });
+    const invalidateTable = () => {
+        if (type === 'employee') {
+            void queryClient.invalidateQueries({ queryKey: ['class-coaches', branchId] });
+        }
+        return queryClient.invalidateQueries({ queryKey: ['table', type, branchId] });
+    };
 
     useEffect(() => {
         setPage(0);
@@ -96,6 +104,7 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
     };
 
     const handleOpenModal = (member?: MemberRow) => {
+        setIsCoach(member?.is_coach ?? false);
         if (member) {
             setEditingMember(member);
             setFormData({ full_name: member.full_name, email: member.email, phone: member.phone || '' });
@@ -109,9 +118,8 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
     const handleSave = async () => {
         setSaving(true);
         try {
-            const payload = editingMember
-                ? formData
-                : { ...formData, branch_id: branchId };
+            const fields = type === 'employee' ? { ...formData, is_coach: isCoach } : formData;
+            const payload = editingMember ? fields : { ...fields, branch_id: branchId };
 
             if (editingMember) {
                 await apiCall(`/api/v1/${endpoint}/${editingMember.id}`, {
@@ -212,6 +220,11 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
             : [{
                 header: 'Correo',
                 cell: (row: MemberRow) => <span className="text-slate-600">{row.email}</span>,
+            }, {
+                header: 'Da clases',
+                cell: (row: MemberRow) => row.is_coach
+                    ? <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">Coach</span>
+                    : <span className="text-slate-500">No</span>,
             }]),
         {
             header: 'Estado',
@@ -323,10 +336,12 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
                 isOpen={isDrawerOpen}
                 onClose={() => setIsDrawerOpen(false)}
                 member={selectedMember}
+                timezone={timezone}
                 onMembershipUpdated={invalidateTable}
-                onEditMember={(memberToEdit) => {
+                onEditMember={() => {
+                    if (!selectedMember) return;
                     setIsDrawerOpen(false);
-                    handleOpenModal(memberToEdit);
+                    handleOpenModal(selectedMember);
                 }}
             />
 
@@ -355,6 +370,17 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId }) =
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     />
+                    {type === 'employee' && (
+                        <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700">
+                            <input
+                                type="checkbox"
+                                checked={isCoach}
+                                onChange={(event) => setIsCoach(event.target.checked)}
+                                className="h-4 w-4 accent-slate-700"
+                            />
+                            Da clases (coach)
+                        </label>
+                    )}
                     <div className="pt-2 flex justify-end gap-3">
                         <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
                         <Button onClick={handleSave} disabled={saving}>

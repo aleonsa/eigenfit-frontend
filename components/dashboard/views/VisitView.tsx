@@ -15,7 +15,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../ui/Button';
 import { StreakLeaderboard, type StreakLeaderboardItem } from './visit/StreakLeaderboard';
-import { useApi } from '../../../hooks/useApi';
+import { ApiError, useApi } from '../../../hooks/useApi';
 
 interface StreakLeaderboardItemRecord {
     member_id: string;
@@ -380,11 +380,17 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
         } catch (err: unknown) {
             console.error('Error during check-in/out:', err);
             void queryClient.invalidateQueries({ queryKey: ['visit-attendances', branchId] });
-            const message = err instanceof Error ? err.message : '';
             const notFoundMessage = parsed.role === 'employee'
                 ? `No se encontró empleado con ID E-${parsed.code}.`
                 : `No se encontró miembro con ID ${parsed.code}.`;
-            setError(message.includes('404') ? notFoundMessage : 'No se pudo registrar la visita. Intenta nuevamente.');
+            const status = err instanceof ApiError ? err.status : null;
+            setError(
+                status === 404
+                    ? notFoundMessage
+                    : status === 401 || status === 403
+                      ? 'La sesión del kiosco expiró. Pide a un encargado que vuelva a iniciar sesión.'
+                      : 'No se pudo registrar la visita. Intenta nuevamente.',
+            );
             setTimeout(() => setError(''), 4000);
         } finally {
             setProcessing(false);

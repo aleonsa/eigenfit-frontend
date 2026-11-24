@@ -7,6 +7,7 @@ import { MembershipsView } from './dashboard/views/MembershipsView';
 import { BusinessView } from './dashboard/views/BusinessView';
 import { SettingsView } from './dashboard/views/SettingsView';
 import { KioskView } from './dashboard/views/kiosk/KioskView';
+import { AgendaView } from './dashboard/views/agenda/AgendaView';
 
 const KIOSK_STORAGE_KEY = 'eigenfit_kiosk_mode';
 
@@ -14,9 +15,11 @@ interface DashboardProps {
     branchId: string;
     branchName: string;
     userRole: string;
+    /** Zona IANA de la sucursal (de /me). */
+    branchTimezone: string;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName, userRole }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName, userRole, branchTimezone }) => {
     const [activeTab, setActiveTab] = useState('inicio');
     const [kioskMode, setKioskMode] = useState(() => {
         return localStorage.getItem(KIOSK_STORAGE_KEY) === 'true';
@@ -44,8 +47,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName, user
                 return <BusinessView branchId={branchId} />;
             case 'visita':
                 return <VisitView branchId={branchId} onActivateKiosk={activateKiosk} />;
+            case 'agenda':
+                return <AgendaView branchId={branchId} userRole={userRole} timezone={branchTimezone} />;
             case 'members':
-                return <TableView title="Miembros Activos" type="member" branchId={branchId} />;
+                return <TableView title="Miembros Activos" type="member" branchId={branchId} timezone={branchTimezone} />;
             case 'employees':
                 return <TableView title="Equipo de Trabajo" type="employee" branchId={branchId} />;
             case 'memberships':

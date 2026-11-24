@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useId, useRef } from 'react';
 import { X } from 'lucide-react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 
 interface DrawerProps {
     isOpen: boolean;
@@ -18,19 +19,9 @@ export const Drawer: React.FC<DrawerProps> = ({
     children,
     width = 'max-w-lg'
 }) => {
-    useEffect(() => {
-        const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
-        };
-        if (isOpen) {
-            document.addEventListener('keydown', handleEscape);
-            document.body.style.overflow = 'hidden';
-        }
-        return () => {
-            document.removeEventListener('keydown', handleEscape);
-            document.body.style.overflow = 'unset';
-        };
-    }, [isOpen, onClose]);
+    const panelRef = useRef<HTMLDivElement>(null);
+    const titleId = useId();
+    useDialogFocus(isOpen, panelRef, onClose);
 
     if (!isOpen) return null;
 
@@ -44,13 +35,21 @@ export const Drawer: React.FC<DrawerProps> = ({
 
             {/* Drawer Content */}
             <div className="fixed inset-y-0 right-0 flex pl-10">
-                <div className={`w-screen ${width} transform transition-transform duration-300 ease-in-out bg-white shadow-2xl h-full flex flex-col animate-in slide-in-from-right`}>
+                <div
+                    ref={panelRef}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby={titleId}
+                    tabIndex={-1}
+                    className={`w-screen ${width} outline-none transform transition-transform duration-300 ease-in-out bg-white shadow-2xl h-full flex flex-col animate-in slide-in-from-right`}>
                     <div className="px-6 py-6 border-b border-slate-100 flex items-start justify-between bg-white shrink-0">
                         <div>
-                            <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+                            <h2 id={titleId} className="text-xl font-semibold text-slate-900">{title}</h2>
                             {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
                         </div>
                         <button
+                            type="button"
+                            aria-label="Cerrar"
                             onClick={onClose}
                             className="text-slate-400 hover:text-slate-600 p-2 rounded-md hover:bg-slate-50 transition-colors -mr-2"
                         >
