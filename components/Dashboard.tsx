@@ -8,6 +8,8 @@ import { BusinessView } from './dashboard/views/BusinessView';
 import { SettingsView } from './dashboard/views/SettingsView';
 import { KioskView } from './dashboard/views/kiosk/KioskView';
 import { AgendaView } from './dashboard/views/agenda/AgendaView';
+import { menuItems } from './dashboard/navigation';
+import { updateTableUrl, useTableUrlState } from '../hooks/useTableUrlState';
 
 const KIOSK_STORAGE_KEY = 'eigenfit_kiosk_mode';
 
@@ -20,7 +22,10 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName, userRole, branchTimezone }) => {
-    const [activeTab, setActiveTab] = useState('inicio');
+    const requestedTab = useTableUrlState().get('tab');
+    const isAdmin = userRole === 'owner' || userRole === 'admin';
+    const activeTab = requestedTab === 'settings' ? 'settings'
+        : menuItems.find(item => item.id === requestedTab && (!item.adminOnly || isAdmin))?.id ?? 'inicio';
     const [kioskMode, setKioskMode] = useState(() => {
         return localStorage.getItem(KIOSK_STORAGE_KEY) === 'true';
     });
@@ -50,9 +55,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName, user
             case 'agenda':
                 return <AgendaView branchId={branchId} userRole={userRole} timezone={branchTimezone} />;
             case 'members':
-                return <TableView title="Miembros Activos" type="member" branchId={branchId} timezone={branchTimezone} />;
+                return <TableView key={`members:${branchId}`} title="Miembros" type="member" branchId={branchId} timezone={branchTimezone} />;
             case 'employees':
-                return <TableView title="Equipo de Trabajo" type="employee" branchId={branchId} />;
+                return <TableView key={`employees:${branchId}`} title="Equipo de Trabajo" type="employee" branchId={branchId} />;
             case 'memberships':
                 return <MembershipsView branchId={branchId} />;
             case 'settings':
@@ -63,7 +68,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName, user
     };
 
     return (
-        <DashboardLayout activeTab={activeTab} onTabChange={setActiveTab} branchName={branchName} userRole={userRole}>
+        <DashboardLayout activeTab={activeTab} onTabChange={tab => updateTableUrl({ tab: tab === 'inicio' ? null : tab })} branchName={branchName} userRole={userRole}>
             {renderContent()}
         </DashboardLayout>
     );

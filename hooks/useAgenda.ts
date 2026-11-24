@@ -203,7 +203,7 @@ export function useMemberSearch(branchId: string, term: string) {
         queryKey: ['class-member-search', branchId, search],
         enabled: Boolean(branchId) && trimmed.length >= 2 && search.length >= 2,
         queryFn: async ({ signal }) => {
-            const query = new URLSearchParams({ branch_id: branchId, search, limit: '10' });
+            const query = new URLSearchParams({ branch_id: branchId, search, limit: '10', include_total: 'false' });
             const { items } = await apiCall<{ items: BookableMember[] }>(`/api/v1/members?${query}`, { signal });
             return items.map(({ id, full_name, code }) => ({ id, full_name, code }));
         },

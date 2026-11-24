@@ -88,7 +88,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, onT
     const { user, logout } = useAuth0();
     const userName = user?.name || user?.email || 'Usuario';
     const userEmail = user?.email || '';
-    const isAdmin = userRole !== 'employee';
+    const isAdmin = userRole === 'owner' || userRole === 'admin';
     const visibleMenuItems = menuItems.filter(item => !item.adminOnly || isAdmin);
 
     return (
@@ -130,18 +130,26 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, onT
             </aside>
 
             {/* Main Content Area */}
-            <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#FAFAFA]">
+            <main className="flex-1 min-w-0 flex flex-col h-screen overflow-hidden bg-[#FAFAFA]">
                 <SessionExpiredBanner />
 
                 {/* Header */}
                 <header className="h-16 border-b border-slate-100 bg-white flex items-center justify-between px-6 shrink-0 z-10">
                     <h1 className="text-lg font-semibold text-slate-900 capitalize">
-                        {visibleMenuItems.find(m => m.id === activeTab)?.label}
+                        {activeTab === 'settings' ? 'Configuración' : visibleMenuItems.find(m => m.id === activeTab)?.label}
                     </h1>
+                    <label className="md:hidden">
+                        <span className="sr-only">Cambiar de sección</span>
+                        <select value={activeTab} onChange={event => onTabChange(event.currentTarget.value)}
+                            className="min-h-11 max-w-40 rounded-md border border-slate-300 bg-white px-2 text-sm">
+                            {visibleMenuItems.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+                            <option value="settings">Configuración</option>
+                        </select>
+                    </label>
                 </header>
 
                 {/* Scrollable Content */}
-                <div className="flex-1 overflow-auto p-6 sm:p-8">
+                <div className={`flex-1 overflow-auto ${activeTab === 'members' ? 'p-3 sm:p-6' : 'p-6 sm:p-8'}`}>
                     <div className="max-w-5xl mx-auto">
                         {children}
                     </div>

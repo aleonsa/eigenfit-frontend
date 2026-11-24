@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Edit2, Trash2, RotateCw, Mail } from 'lucide-react';
+import { Edit2, Trash2, Mail } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DataTable, Column } from '../../ui/DataTable';
 import { MemberDetailDrawer } from './MemberDetailDrawer';
@@ -10,22 +10,7 @@ import { useApi } from '../../../hooks/useApi';
 import { MemberCreationModal } from './MemberCreationModal';
 import { ErrorBoundary } from '../../ui/ErrorBoundary';
 import { useDebouncedValue } from '../../../hooks/useDebouncedValue';
-
-interface MemberRow {
-    id: string;
-    branch_id: string;
-    code: number;
-    role: string;
-    is_coach?: boolean;
-    full_name: string;
-    email: string;
-    phone: string | null;
-    created_at: string;
-    memberships: string[];
-    is_active: boolean;
-    last_payment_date: string | null;
-    due_date: string | null;
-}
+import { MemberDirectory, type MemberRow } from './MemberDirectory';
 
 const formatCode = (code: number, role: string): string =>
     role === 'employee' ? `E-${code}` : String(code);
@@ -74,6 +59,7 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId, tim
 
     const { data, isLoading: loading } = useQuery({
         queryKey,
+        enabled: type === 'employee',
         queryFn: async () => {
             const skip = page * PAGE_SIZE;
             return apiCall<MemberPage>(
@@ -96,11 +82,9 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId, tim
         setPage(0);
     }, [debouncedSearch]);
 
-    const handleRowClick = (row: MemberRow) => {
-        if (type === 'member') {
-            setSelectedMember(row);
-            setIsDrawerOpen(true);
-        }
+    const openMember = (row: MemberRow) => {
+        setSelectedMember(row);
+        setIsDrawerOpen(true);
     };
 
     const handleOpenModal = (member?: MemberRow) => {
@@ -171,16 +155,6 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId, tim
         }
     };
 
-    const formatShortDate = (value: string | null) => {
-        if (!value) return '—';
-        return new Intl.DateTimeFormat('es-MX', {
-            timeZone: 'America/Mexico_City',
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-        }).format(new Date(value));
-    };
-
     const columns: Column<MemberRow>[] = [
         {
             header: 'ID',
@@ -191,41 +165,17 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId, tim
         },
         {
             header: 'Nombre',
-            cell: (row) => (
-                <button
-                    onClick={() => handleRowClick(row)}
-                    className={`font-medium text-slate-900 hover:text-blue-600 hover:underline text-left ${type === 'member' ? 'cursor-pointer' : 'cursor-default'}`}
-                >
-                    {row.full_name}
-                    {type === 'member' && (
-                        <>
-                            <br />
-                            <span className="text-sm text-slate-500">{row.email}</span>
-                            {row.phone && (
-                                <>
-                                    <br />
-                                    <span className="text-xs text-slate-400">{row.phone}</span>
-                                </>
-                            )}
-                        </>
-                    )}
-                </button>
-            ),
+            cell: (row) => <span className="font-medium text-slate-900">{row.full_name}</span>,
         },
-        ...(type === 'member'
-            ? [{
-                header: 'Membresías',
-                cell: (row: MemberRow) => <span>{row.memberships?.join(', ') || '—'}</span>,
-            }]
-            : [{
-                header: 'Correo',
-                cell: (row: MemberRow) => <span className="text-slate-600">{row.email}</span>,
-            }, {
-                header: 'Da clases',
-                cell: (row: MemberRow) => row.is_coach
-                    ? <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">Coach</span>
-                    : <span className="text-slate-500">No</span>,
-            }]),
+        {
+            header: 'Correo',
+            cell: (row) => <span className="text-slate-600">{row.email}</span>,
+        }, {
+            header: 'Da clases',
+            cell: (row) => row.is_coach
+                ? <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">Coach</span>
+                : <span className="text-slate-500">No</span>,
+        },
         {
             header: 'Estado',
             cell: (row) => (
@@ -234,22 +184,6 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId, tim
                 </span>
             ),
         },
-        ...(type === 'member'
-            ? [
-                {
-                    header: 'Último Pago',
-                    cell: (row: MemberRow) => (
-                        <span className="text-slate-500">{formatShortDate(row.last_payment_date)}</span>
-                    ),
-                },
-                {
-                    header: 'Vencimiento',
-                    cell: (row: MemberRow) => (
-                        <span className="text-slate-500">{formatShortDate(row.due_date)}</span>
-                    ),
-                },
-            ]
-            : []),
         {
             header: '',
             cell: (row) => (
@@ -261,24 +195,13 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId, tim
                     >
                         <Edit2 size={15} />
                     </button>
-                    {type === 'member' && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedMember(row); setIsDrawerOpen(true); }}
-                            className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                            title="Renovar Membresía"
-                        >
-                            <RotateCw size={15} />
-                        </button>
-                    )}
-                    {type === 'employee' && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); setInvitingEmployee(row); setInviteRole('staff'); }}
-                            className="p-1.5 rounded-md text-slate-400 hover:text-green-600 hover:bg-green-50 transition-colors"
-                            title="Invitar al dashboard"
-                        >
-                            <Mail size={15} />
-                        </button>
-                    )}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setInvitingEmployee(row); setInviteRole('staff'); }}
+                        className="p-1.5 rounded-md text-slate-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+                        title="Invitar al dashboard"
+                    >
+                        <Mail size={15} />
+                    </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); setDeletingId(row.id); }}
                         className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
@@ -295,21 +218,16 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId, tim
     return (
         <>
             <ErrorBoundary>
-                <DataTable
+                {type === 'member' ? <MemberDirectory title={title} branchId={branchId} timezone={timezone}
+                    onNew={() => setIsMemberModalOpen(true)} onOpen={openMember} onEdit={handleOpenModal} onDelete={setDeletingId} /> : <DataTable
                     title={title}
                     data={members}
                     columns={columns}
-                    searchPlaceholder={`Buscar ${type === 'member' ? 'miembro' : 'empleado'}...`}
+                    searchPlaceholder="Buscar empleado..."
                     searchValue={search}
                     onSearchChange={setSearch}
-                    actionLabel={`Nuevo ${type === 'member' ? 'Miembro' : 'Empleado'}`}
-                    onAction={() => {
-                        if (type === 'member') {
-                            setIsMemberModalOpen(true);
-                        } else {
-                            handleOpenModal();
-                        }
-                    }}
+                    actionLabel="Nuevo Empleado"
+                    onAction={() => handleOpenModal()}
                     loading={loading}
                     pagination={{
                         page,
@@ -317,7 +235,7 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId, tim
                         totalItems: total,
                         onPageChange: setPage,
                     }}
-                />
+                />}
             </ErrorBoundary>
 
             {type === 'member' && (
