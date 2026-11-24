@@ -35,8 +35,9 @@ interface DataTableProps<T, K extends string> {
     empty: React.ReactNode;
 }
 
-const number = new Intl.NumberFormat('en-US');
+const number = new Intl.NumberFormat('es-MX');
 const hideClasses = { lg: 'hidden lg:table-cell', xl: 'hidden xl:table-cell' };
+const paginationButton = '!min-h-11 !px-2 md:!min-h-9 md:!py-1 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:hover:bg-white';
 
 export function DataTable<T extends { id: string }, K extends string>({
     title, toolbar, columns, rows, renderMobileCard, sort, onSort, page, pending, refreshing, blocked, error, retry, empty,
@@ -50,7 +51,7 @@ export function DataTable<T extends { id: string }, K extends string>({
     return (
         <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
             {toolbar}
-            <div role="status" className="sr-only">{!refreshing && !pending && !error ? count : ''}</div>
+            <div role="status" className="sr-only">{!refreshing && !pending && !blocked && !error ? count : ''}</div>
             {error && <div className="flex flex-wrap items-center justify-between gap-2 border-b border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
                 <span>{error}</span><Button type="button" variant="outline" onClick={retry}>Reintentar</Button>
             </div>}
@@ -86,7 +87,7 @@ export function DataTable<T extends { id: string }, K extends string>({
                     {pending ? Array.from({ length: 5 }, (_, i) => <li key={i} aria-hidden="true" className="h-36 space-y-4 p-4 motion-safe:animate-pulse"><div className="h-3 w-1/2 rounded bg-slate-100" /><div className="h-3 w-3/4 rounded bg-slate-100" /></li>)
                         : rows.map(row => <li key={row.id} className="p-4">{renderMobileCard(row, blocked)}</li>)}
                 </ul>
-                {!pending && !refreshing && !error && rows.length === 0 && empty}
+                {!pending && !error && rows.length === 0 && empty && <div className={refreshing ? 'opacity-70' : undefined}>{empty}</div>}
             </div>
             <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
                 <span className="tabular-nums">Página {page.index + 1}{!pending && !blocked && ` · ${count}`}</span>
@@ -100,11 +101,11 @@ export function DataTable<T extends { id: string }, K extends string>({
                         </select>
                     </label>
                     <nav className="flex gap-1" aria-label="Paginación">
-                        <Button type="button" variant="outline" className="!min-h-11 !px-2 md:!min-h-9 md:!py-1" aria-disabled={page.index === 0 || blocked || pending}
+                        <Button type="button" variant="outline" className={paginationButton} aria-disabled={page.index === 0 || blocked || pending}
                             onClick={() => { if (page.index > 0 && !blocked && !pending) page.change(page.index - 1); }}>
                             <ChevronLeft size={15} aria-hidden="true" />Anterior
                         </Button>
-                        <Button type="button" variant="outline" className="!min-h-11 !px-2 md:!min-h-9 md:!py-1" aria-disabled={!canNext}
+                        <Button type="button" variant="outline" className={paginationButton} aria-disabled={!canNext}
                             onMouseEnter={() => { if (canNext) page.prefetchNext(); }} onFocus={() => { if (canNext) page.prefetchNext(); }}
                             onClick={() => { if (canNext) page.change(page.index + 1); }}>
                             Siguiente<ChevronRight size={15} aria-hidden="true" />
