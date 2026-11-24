@@ -44,6 +44,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName, user
         return <KioskView branchId={branchId} branchName={branchName} onExit={deactivateKiosk} />;
     }
 
+    function changeTab(tab: string) {
+        if (tab === activeTab) return;
+        updateTableUrl({
+            tab: tab === 'inicio' ? null : tab,
+            status: null, plan_id: null, last_visit: null, joined_from: null, joined_before: null,
+            sort: null, page: null, limit: null,
+        });
+    }
+
     const renderContent = () => {
         switch (activeTab) {
             case 'inicio':
@@ -68,7 +77,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName, user
     };
 
     return (
-        <DashboardLayout activeTab={activeTab} onTabChange={tab => updateTableUrl({ tab: tab === 'inicio' ? null : tab })} branchName={branchName} userRole={userRole}>
+        <DashboardLayout activeTab={activeTab} onTabChange={changeTab} branchName={branchName} userRole={userRole}>
             {renderContent()}
         </DashboardLayout>
     );

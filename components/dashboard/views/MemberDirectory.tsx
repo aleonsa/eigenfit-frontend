@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { keepPreviousData, queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Edit2, Plus, RotateCw, Trash2 } from 'lucide-react';
-import { ApiError, useApi } from '../../../hooks/useApi';
+import { ApiError, isAuthError, useApi } from '../../../hooks/useApi';
 import { updateTableUrl, useTableUrlState } from '../../../hooks/useTableUrlState';
 import { localDateOf } from '../../../lib/agenda/time';
 import { Button } from '../../ui/Button';
@@ -189,7 +189,6 @@ export function MemberDirectory({ title, branchId, timezone = 'America/Mexico_Ci
         if (term === q) return;
         setQuery(term);
         setSearchPage(0);
-        updateTableUrl({ page: null }, true);
     }, [q]);
 
     useEffect(() => {
@@ -224,7 +223,11 @@ export function MemberDirectory({ title, branchId, timezone = 'America/Mexico_Ci
         });
     }
 
-    const result = useQuery({ ...memberQuery(offset), placeholderData: keepPreviousData, refetchOnWindowFocus: true });
+    const result = useQuery({
+        ...memberQuery(offset),
+        placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === branchId ? previous : undefined,
+        refetchOnWindowFocus: query => !isAuthError(query.state.error),
+    });
     const plansQuery = useQuery({
         queryKey: ['membership-plans', branchId],
         queryFn: ({ signal }) => apiCall<PlanOption[]>(`/api/v1/membership-plans?${new URLSearchParams({ branch_id: branchId })}`, { signal }),
@@ -233,7 +236,8 @@ export function MemberDirectory({ title, branchId, timezone = 'America/Mexico_Ci
     const rows = result.data?.items ?? [];
     const total = result.data?.total ?? null;
     const hasMore = offset + limit <= maxOffset && (result.data?.has_more ?? (total !== null ? offset + rows.length < total : rows.length === limit));
-    const blocked = result.isPlaceholderData || typing;
+    const authError = isAuthError(result.error);
+    const blocked = result.isPlaceholderData || typing || authError;
     const refreshing = result.isFetching || typing;
 
     function applyFilters(next: MemberFilters) {
@@ -275,7 +279,9 @@ export function MemberDirectory({ title, branchId, timezone = 'America/Mexico_Ci
         { label: 'Por vencer', status: ['expiring'] }, { label: 'Sin vigencia', status: ['expired'] },
     ];
 
-    const dateFormat = new Intl.DateTimeFormat('es-MX', { timeZone: timezone, day: '2-digit', month: 'short', year: 'numeric' });
+    const dateFormat = useMemo(() => new Intl.DateTimeFormat('es-MX', {
+        timeZone: timezone, day: '2-digit', month: 'short', year: 'numeric',
+    }), [timezone]);
     const today = localDateOf(new Date().toISOString(), timezone);
     function calendarDays(iso: string) {
         const date = localDateOf(iso, timezone);
@@ -343,6 +349,9 @@ export function MemberDirectory({ title, branchId, timezone = 'America/Mexico_Ci
                     {sortOptions.flatMap(({ id, label }) => [<option key={id} value={id}>{label} ↑</option>, <option key={`-${id}`} value={`-${id}`}>{label} ↓</option>])}
                 </select>
             </label>} />
+        {sort.key === 'joined_at' && <p className="hidden px-5 pb-3 text-xs text-slate-600 md:block">
+            Orden: Fecha de alta · {sort.direction === 'asc' ? 'más antiguas primero' : 'más recientes primero'}
+        </p>}
         {!!result.data && result.data.has_more === undefined && (chips.length > 0 || params.has('sort')) &&
             <p className="px-4 pb-3 text-sm text-slate-600" role="status">Los filtros y el orden aún no están disponibles en este servidor.</p>}
     </>;
@@ -359,9 +368,10 @@ export function MemberDirectory({ title, branchId, timezone = 'America/Mexico_Ci
         page={{ index: page, size: limit, total, capped: result.data?.total_capped ?? false, hasMore, change: changePage, changeSize,
             prefetchNext: () => { if (!result.isFetching) void client.prefetchQuery(memberQuery(offset + limit)); } }}
         pending={result.isPending} refreshing={!result.isPending && refreshing} blocked={blocked}
-        error={result.error instanceof ApiError && result.error.status === 422 ? 'Revisa la búsqueda (hasta 8 términos) y los filtros.'
-            : result.isError ? result.data ? 'No pudimos actualizar los resultados.' : 'No pudimos cargar los miembros.' : undefined}
-        retry={() => void result.refetch()} empty={<div className="space-y-3 px-4 py-12 text-center text-sm text-slate-600">
+        error={result.isError && !authError ? result.error instanceof ApiError && result.error.status === 422
+            ? 'Revisa la búsqueda (hasta 8 términos) y los filtros.'
+            : result.data ? 'No pudimos actualizar los resultados.' : 'No pudimos cargar los miembros.' : undefined}
+        retry={() => void result.refetch()} empty={!authError && <div className="space-y-3 px-4 py-12 text-center text-sm text-slate-600">
             <p className="font-semibold text-slate-900">{page > 0 ? 'No hay resultados en esta página' : hasCriteria ? 'Sin coincidencias' : 'Aún no hay miembros'}</p>
             <div className="flex flex-wrap justify-center gap-2">
                 {page > 0 ? <Button type="button" variant="outline" onClick={() => changePage(0)}>Volver a la primera página</Button> : hasCriteria ? <>
