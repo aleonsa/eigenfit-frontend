@@ -309,7 +309,7 @@ export const AgendaSettingsDrawer: React.FC<AgendaSettingsDrawerProps> = ({ bran
                         Coaches
                     </h3>
                     <p className="text-xs text-slate-500">
-                        Son los empleados marcados con “Da clases” en <em>Equipo de trabajo</em>.
+                        Son los empleados marcados con “Da clases” en <em>Staff/Empleados</em>.
                     </p>
                     {coaches.isSuccess &&
                         (coaches.data.length ? (
