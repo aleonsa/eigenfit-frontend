@@ -11,6 +11,7 @@ import {
     Loader2,
 } from 'lucide-react';
 import { useApiQuery } from '../../../hooks/useApiQuery';
+import { clearTableParams, updateTableUrl } from '../../../hooks/useTableUrlState';
 
 interface BusinessDashboardResponse {
     generated_at: string;
@@ -299,10 +300,16 @@ export const BusinessView: React.FC<BusinessViewProps> = ({ branchId }) => {
             </div>
 
             <div className={`${cardClass} p-6`}>
-                <div className="flex items-center gap-2 mb-4">
+                <div className="mb-4 flex flex-wrap items-center gap-2">
                     <AlertTriangle size={16} className="text-amber-500" />
                     <h3 className="text-sm font-semibold text-slate-900">Miembros Inactivos</h3>
                     <span className="text-xs text-slate-400">sin visita en 30+ dias</span>
+                    <a href="?tab=members&last_visit=inactive_30d" className="ml-auto text-sm font-medium text-blue-700 hover:underline"
+                        onClick={event => {
+                            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+                            event.preventDefault();
+                            updateTableUrl({ ...clearTableParams, tab: 'members', last_visit: 'inactive_30d' });
+                        }}>Ver todos</a>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">

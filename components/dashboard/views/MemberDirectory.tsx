@@ -338,8 +338,8 @@ export function MemberDirectory({ title, branchId, timezone = 'America/Mexico_Ci
     const toolbar = <>
         <TableToolbar title={title} search={{ value: draft, placeholder: 'Nombre, correo, teléfono o ID', pending: typing || (Boolean(q) && result.isFetching),
             change: setDraft, submit: submitSearch, compose: setComposing }}
-            filters={filters} validateDraft={validRange} chips={chips} applyFilters={applyFilters} clearFilters={() => applyFilters(noFilters)}
-            renderFilters={(draftFilters, change) => <MemberFilterFields filters={draftFilters} change={change} plans={plans} plansError={plansQuery.isError} plansLoading={plansQuery.isPending} />}
+            filter={{ value: filters, validate: validRange, chips, apply: applyFilters, clear: () => applyFilters(noFilters),
+                render: (draftFilters, change) => <MemberFilterFields filters={draftFilters} change={change} plans={plans} plansError={plansQuery.isError} plansLoading={plansQuery.isPending} /> }}
             action={newButton} presets={presets.map(preset => {
                 const selected = preset.status.length === filters.status.length && preset.status.every(status => filters.status.includes(status));
                 return <button key={preset.label} type="button" aria-pressed={selected} onClick={() => applyFilters({ ...filters, status: preset.status })}

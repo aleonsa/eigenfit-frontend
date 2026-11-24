@@ -25,7 +25,7 @@ interface DataTableProps<T, K extends string> {
     onSort: (key: K) => void;
     page: {
         index: number; size: PageSize; total: number | null; capped: boolean; hasMore: boolean;
-        change: (index: number) => void; changeSize: (size: PageSize) => void; prefetchNext: () => void;
+        change: (index: number) => void; changeSize: (size: PageSize) => void; prefetchNext?: () => void;
     };
     pending: boolean;
     refreshing: boolean;
@@ -106,7 +106,7 @@ export function DataTable<T extends { id: string }, K extends string>({
                             <ChevronLeft size={15} aria-hidden="true" />Anterior
                         </Button>
                         <Button type="button" variant="outline" className={paginationButton} aria-disabled={!canNext}
-                            onMouseEnter={() => { if (canNext) page.prefetchNext(); }} onFocus={() => { if (canNext) page.prefetchNext(); }}
+                            onMouseEnter={() => { if (canNext) page.prefetchNext?.(); }} onFocus={() => { if (canNext) page.prefetchNext?.(); }}
                             onClick={() => { if (canNext) page.change(page.index + 1); }}>
                             Siguiente<ChevronRight size={15} aria-hidden="true" />
                         </Button>

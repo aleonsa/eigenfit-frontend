@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Edit2, Trash2, Mail } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { DataTable, Column } from '../../ui/DataTable';
+import React, { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { MemberDetailDrawer } from './MemberDetailDrawer';
 import { Modal } from '../../ui/Modal';
 import { Input, Select } from '../../ui/Input';
@@ -9,16 +7,8 @@ import { Button } from '../../ui/Button';
 import { useApi } from '../../../hooks/useApi';
 import { MemberCreationModal } from './MemberCreationModal';
 import { ErrorBoundary } from '../../ui/ErrorBoundary';
-import { useDebouncedValue } from '../../../hooks/useDebouncedValue';
 import { MemberDirectory, type MemberRow } from './MemberDirectory';
-
-const formatCode = (code: number, role: string): string =>
-    role === 'employee' ? `E-${code}` : String(code);
-
-interface MemberPage {
-    items: MemberRow[];
-    total: number;
-}
+import { EmployeeDirectory } from './EmployeeDirectory';
 
 interface TableViewProps {
     title: string;
@@ -27,14 +17,9 @@ interface TableViewProps {
     timezone?: string;
 }
 
-const PAGE_SIZE = 20;
-
 export const TableView: React.FC<TableViewProps> = ({ title, type, branchId, timezone }) => {
     const { apiCall } = useApi();
     const queryClient = useQueryClient();
-    const [page, setPage] = useState(0);
-    const [search, setSearch] = useState('');
-    const debouncedSearch = useDebouncedValue(search, 300);
 
     const [selectedMember, setSelectedMember] = useState<MemberRow | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -55,21 +40,6 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId, tim
     const [inviting, setInviting] = useState(false);
 
     const endpoint = type === 'member' ? 'members' : 'employees';
-    const queryKey = ['table', type, branchId, page, debouncedSearch];
-
-    const { data, isLoading: loading } = useQuery({
-        queryKey,
-        enabled: type === 'employee',
-        queryFn: async () => {
-            const skip = page * PAGE_SIZE;
-            return apiCall<MemberPage>(
-                `/api/v1/${endpoint}?branch_id=${branchId}&skip=${skip}&limit=${PAGE_SIZE}&search=${encodeURIComponent(debouncedSearch)}`
-            );
-        },
-    });
-
-    const members = data?.items ?? [];
-    const total = data?.total ?? 0;
 
     const invalidateTable = () => {
         if (type === 'employee') {
@@ -77,10 +47,6 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId, tim
         }
         return queryClient.invalidateQueries({ queryKey: ['table', type, branchId] });
     };
-
-    useEffect(() => {
-        setPage(0);
-    }, [debouncedSearch]);
 
     const openMember = (row: MemberRow) => {
         setSelectedMember(row);
@@ -155,87 +121,13 @@ export const TableView: React.FC<TableViewProps> = ({ title, type, branchId, tim
         }
     };
 
-    const columns: Column<MemberRow>[] = [
-        {
-            header: 'ID',
-            cell: (row) => (
-                <span className="font-mono font-semibold text-slate-700">{formatCode(row.code, row.role)}</span>
-            ),
-            className: 'w-20',
-        },
-        {
-            header: 'Nombre',
-            cell: (row) => <span className="font-medium text-slate-900">{row.full_name}</span>,
-        },
-        {
-            header: 'Correo',
-            cell: (row) => <span className="text-slate-600">{row.email}</span>,
-        }, {
-            header: 'Da clases',
-            cell: (row) => row.is_coach
-                ? <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">Coach</span>
-                : <span className="text-slate-500">No</span>,
-        },
-        {
-            header: 'Estado',
-            cell: (row) => (
-                <span className={`font-medium ${row.is_active ? 'text-green-600' : 'text-red-600'}`}>
-                    {row.is_active ? 'Activo' : 'Inactivo'}
-                </span>
-            ),
-        },
-        {
-            header: '',
-            cell: (row) => (
-                <div className="flex justify-end gap-1">
-                    <button
-                        onClick={(e) => { e.stopPropagation(); handleOpenModal(row); }}
-                        className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                        title="Editar"
-                    >
-                        <Edit2 size={15} />
-                    </button>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); setInvitingEmployee(row); setInviteRole('staff'); }}
-                        className="p-1.5 rounded-md text-slate-400 hover:text-green-600 hover:bg-green-50 transition-colors"
-                        title="Invitar al dashboard"
-                    >
-                        <Mail size={15} />
-                    </button>
-                    <button
-                        onClick={(e) => { e.stopPropagation(); setDeletingId(row.id); }}
-                        className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        title="Eliminar"
-                    >
-                        <Trash2 size={15} />
-                    </button>
-                </div>
-            ),
-            className: 'text-right',
-        },
-    ];
-
     return (
         <>
             <ErrorBoundary>
                 {type === 'member' ? <MemberDirectory title={title} branchId={branchId} timezone={timezone}
-                    onNew={() => setIsMemberModalOpen(true)} onOpen={openMember} onEdit={handleOpenModal} onDelete={setDeletingId} /> : <DataTable
-                    title={title}
-                    data={members}
-                    columns={columns}
-                    searchPlaceholder="Buscar empleado..."
-                    searchValue={search}
-                    onSearchChange={setSearch}
-                    actionLabel="Nuevo Empleado"
-                    onAction={() => handleOpenModal()}
-                    loading={loading}
-                    pagination={{
-                        page,
-                        pageSize: PAGE_SIZE,
-                        totalItems: total,
-                        onPageChange: setPage,
-                    }}
-                />}
+                    onNew={() => setIsMemberModalOpen(true)} onOpen={openMember} onEdit={handleOpenModal} onDelete={setDeletingId} /> :
+                    <EmployeeDirectory title={title} branchId={branchId} timezone={timezone} onNew={() => handleOpenModal()} onEdit={handleOpenModal}
+                        onInvite={row => { setInvitingEmployee(row); setInviteRole('staff'); }} onDelete={setDeletingId} />}
             </ErrorBoundary>
 
             {type === 'member' && (
