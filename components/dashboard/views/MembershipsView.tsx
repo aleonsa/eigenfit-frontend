@@ -3,9 +3,10 @@ import { Plus, Trash2, CreditCard, Edit2, Loader2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
-import { Input } from '../../ui/Input';
+import { Input, Select } from '../../ui/Input';
 import { useApi } from '../../../hooks/useApi';
 import { useApiQuery } from '../../../hooks/useApiQuery';
+import type { ClassAccessMode } from '../../../types';
 
 interface MembershipPlan {
     id: string;
@@ -14,7 +15,26 @@ interface MembershipPlan {
     description: string | null;
     price: number;
     duration_months: number;
+    class_access: ClassAccessMode;
+    class_credit_limit: number | null;
 }
+
+const classAccessLabels: Record<ClassAccessMode, string> = {
+    none: 'Sin clases',
+    unlimited: 'Clases ilimitadas',
+    credits: 'Paquete de N clases',
+};
+
+const classAccessOptions = Object.entries(classAccessLabels).map(([value, label]) => ({ value, label }));
+
+const emptyForm: {
+    name: string;
+    description: string;
+    duration_months: string;
+    price: string;
+    class_access: ClassAccessMode;
+    class_credit_limit: string;
+} = { name: '', description: '', duration_months: '', price: '', class_access: 'none', class_credit_limit: '' };
 
 interface MembershipsViewProps {
     branchId: string;
@@ -34,7 +54,9 @@ export const MembershipsView: React.FC<MembershipsViewProps> = ({ branchId }) =>
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [formData, setFormData] = useState({ name: '', description: '', duration_months: '', price: '' });
+    const [formData, setFormData] = useState(emptyForm);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState('');
 
     const handleOpenModal = (plan?: MembershipPlan) => {
         if (plan) {
@@ -43,43 +65,47 @@ export const MembershipsView: React.FC<MembershipsViewProps> = ({ branchId }) =>
                 name: plan.name,
                 description: plan.description || '',
                 duration_months: plan.duration_months.toString(),
-                price: plan.price.toString()
+                price: plan.price.toString(),
+                class_access: plan.class_access ?? 'none',
+                class_credit_limit: plan.class_credit_limit?.toString() ?? '',
             });
         } else {
             setEditingId(null);
-            setFormData({ name: '', description: '', duration_months: '', price: '' });
+            setFormData(emptyForm);
         }
+        setSaveError('');
         setIsModalOpen(true);
     };
 
-    const handleSave = async () => {
+    const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (saving) return;
+        const payload = {
+            name: formData.name.trim(),
+            description: formData.description.trim() || null,
+            duration_months: Number(formData.duration_months),
+            price: Number(formData.price),
+            class_access: formData.class_access,
+            class_credit_limit: formData.class_access === 'credits' ? Number(formData.class_credit_limit) : null,
+        };
+        if (!payload.name) {
+            setSaveError('Escribe un título para el plan.');
+            return;
+        }
+        setSaving(true);
+        setSaveError('');
         try {
-            if (editingId) {
-                await apiCall(`/api/v1/membership-plans/${editingId}`, {
-                    method: 'PUT',
-                    body: JSON.stringify({
-                        name: formData.name,
-                        description: formData.description || null,
-                        duration_months: Number(formData.duration_months),
-                        price: Number(formData.price),
-                    }),
-                });
-            } else {
-                await apiCall('/api/v1/membership-plans', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        branch_id: branchId,
-                        name: formData.name,
-                        description: formData.description || null,
-                        duration_months: Number(formData.duration_months),
-                        price: Number(formData.price),
-                    }),
-                });
-            }
-            invalidatePlans();
+            await apiCall(editingId ? `/api/v1/membership-plans/${editingId}` : '/api/v1/membership-plans', {
+                method: editingId ? 'PUT' : 'POST',
+                body: JSON.stringify(editingId ? payload : { ...payload, branch_id: branchId }),
+            });
+            await invalidatePlans();
             setIsModalOpen(false);
         } catch (e) {
             console.error('Error saving plan:', e);
+            setSaveError('No se pudo guardar el plan. Intenta de nuevo.');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -124,7 +150,12 @@ export const MembershipsView: React.FC<MembershipsViewProps> = ({ branchId }) =>
 
                             <div className="sm:col-span-3">
                                 <label className="text-xs font-semibold text-slate-400 uppercase mb-1 block sm:hidden">Título</label>
-                                <span className="font-medium text-slate-900 text-sm">{plan.name}</span>
+                                <span className="font-medium text-slate-900 text-sm break-words">{plan.name}</span>
+                                <p className="mt-1 text-xs text-slate-600">
+                                    {plan.class_access === 'credits'
+                                        ? `Paquete de ${plan.class_credit_limit} ${plan.class_credit_limit === 1 ? 'clase' : 'clases'}`
+                                        : classAccessLabels[plan.class_access ?? 'none']}
+                                </p>
                             </div>
 
                             <div className="sm:col-span-5">
@@ -178,18 +209,23 @@ export const MembershipsView: React.FC<MembershipsViewProps> = ({ branchId }) =>
 
             <Modal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => { if (!saving) setIsModalOpen(false); }}
                 title={editingId ? 'Editar Membresía' : 'Nueva Membresía'}
             >
-                <div className="space-y-4">
+                <form className="max-h-[calc(100dvh-10rem)] overflow-y-auto space-y-4" onSubmit={handleSave}>
                     <Input
                         label="Título"
+                        aria-label="Título"
+                        required
+                        maxLength={255}
                         placeholder="Ej. Mensualidad Gym"
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     />
                     <Input
                         label="Descripción"
+                        aria-label="Descripción"
+                        maxLength={1024}
                         placeholder="Ej. Acceso a todas las áreas"
                         value={formData.description}
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -197,24 +233,58 @@ export const MembershipsView: React.FC<MembershipsViewProps> = ({ branchId }) =>
                     <div className="grid grid-cols-2 gap-4">
                         <Input
                             label="Duración (Meses)"
+                            aria-label="Duración en meses"
                             type="number"
+                            min={1}
+                            step={1}
+                            required
                             placeholder="1"
                             value={formData.duration_months}
                             onChange={(e) => setFormData({ ...formData, duration_months: e.target.value })}
                         />
                         <Input
                             label="Precio"
+                            aria-label="Precio"
                             type="number"
+                            min={0}
+                            step="any"
+                            required
                             placeholder="0.00"
                             value={formData.price}
                             onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                         />
                     </div>
-                    <div className="pt-2 flex justify-end gap-3">
-                        <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleSave}>Guardar</Button>
+                    <Select
+                        label="Acceso a clases"
+                        aria-label="Acceso a clases"
+                        value={formData.class_access}
+                        options={classAccessOptions}
+                        onChange={(event) => {
+                            const mode = event.target.value;
+                            if (mode === 'none' || mode === 'unlimited' || mode === 'credits') {
+                                setFormData({ ...formData, class_access: mode, class_credit_limit: '' });
+                            }
+                        }}
+                    />
+                    {formData.class_access === 'credits' && (
+                        <Input
+                            label="Clases incluidas"
+                            aria-label="Clases incluidas"
+                            type="number"
+                            min={1}
+                            max={2147483647}
+                            step={1}
+                            required
+                            value={formData.class_credit_limit}
+                            onChange={(event) => setFormData({ ...formData, class_credit_limit: event.target.value })}
+                        />
+                    )}
+                    {saveError && <p role="alert" className="text-sm text-slate-700">{saveError}</p>}
+                    <div className="flex flex-wrap justify-end gap-3">
+                        <Button type="button" variant="outline" disabled={saving} onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+                        <Button type="submit" isLoading={saving}>{saving ? 'Guardando...' : 'Guardar'}</Button>
                     </div>
-                </div>
+                </form>
             </Modal>
 
         </div>

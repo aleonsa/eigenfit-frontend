@@ -7,7 +7,7 @@ import { useApi } from './hooks/useApi';
 
 interface MeData {
   user: { id: string; email: string; full_name: string };
-  branch: { id: string; name: string } | null;
+  branch: { id: string; name: string; timezone?: string } | null;
   role: string | null;
 }
 
@@ -23,11 +23,8 @@ const App: React.FC = () => {
     try {
       const data = await apiCall<MeData>('/api/v1/me', {
         method: 'POST',
-        body: JSON.stringify({
-          auth0_id: user.sub,
-          email: user.email,
-          full_name: user.name || user.email,
-        }),
+        // auth0_id y email los toma el backend del JWT verificado.
+        body: JSON.stringify({ full_name: user.name || user.email }),
       });
       setMeData(data);
     } catch (e) {
@@ -55,7 +52,9 @@ const App: React.FC = () => {
     return <OnboardingView userId={meData?.user.id} onComplete={syncMe} />;
   }
 
-  return <Dashboard branchId={meData.branch.id} branchName={meData.branch.name} userRole={meData.role || 'employee'} />;
+  return <Dashboard branchId={meData.branch.id} branchName={meData.branch.name} userRole={meData.role || 'employee'}
+      branchTimezone={meData.branch.timezone || 'America/Mexico_City'}
+    />;
 };
 
 export default App;

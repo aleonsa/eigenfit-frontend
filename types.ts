@@ -95,6 +95,8 @@ export interface PlansResponse {
   prices: PlanPrice[];
 }
 
+export type ClassAccessMode = 'none' | 'unlimited' | 'credits';
+
 export interface CreateBranchResponse {
   branch: {
     id: string;

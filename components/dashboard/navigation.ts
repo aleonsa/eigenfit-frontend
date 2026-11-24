@@ -1,4 +1,4 @@
-import { Home, BarChart3, Users, QrCode, Briefcase, CreditCard } from 'lucide-react';
+import { Home, BarChart3, Users, QrCode, Briefcase, CreditCard, CalendarDays } from 'lucide-react';
 import React from 'react';
 
 export interface MenuItem {
@@ -11,6 +11,7 @@ export interface MenuItem {
 export const menuItems: MenuItem[] = [
     { id: 'inicio', label: 'Inicio', icon: Home },
     { id: 'visita', label: 'Registrar visita', icon: QrCode },
+    { id: 'agenda', label: 'Agenda', icon: CalendarDays },
     { id: 'negocio', label: 'Negocio', icon: BarChart3, adminOnly: true },
     { id: 'members', label: 'Miembros', icon: Users },
     { id: 'employees', label: 'Staff/Empleados', icon: Briefcase, adminOnly: true },

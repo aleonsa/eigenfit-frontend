@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Drawer } from '../../ui/Drawer';
 import { Modal } from '../../ui/Modal';
 import { Button } from '../../ui/Button';
 import { User, CreditCard, Clock, RotateCw, Edit2, Check } from 'lucide-react';
 import { useApi } from '../../../hooks/useApi';
+import { MemberClassSection } from './MemberClassSection';
 
 interface Member {
     id: string;
@@ -48,6 +50,7 @@ interface MemberDetailDrawerProps {
     isOpen: boolean;
     onClose: () => void;
     member: Member | null;
+    timezone?: string;
     onMembershipUpdated?: () => void;
     onEditMember?: (member: Member) => void;
 }
@@ -93,10 +96,12 @@ export const MemberDetailDrawer: React.FC<MemberDetailDrawerProps> = ({
     isOpen,
     onClose,
     member,
+    timezone = MX_TZ,
     onMembershipUpdated,
     onEditMember,
 }) => {
     const { apiCall } = useApi();
+    const queryClient = useQueryClient();
 
     const [memberships, setMemberships] = useState<MemberMembership[]>([]);
     const [plans, setPlans] = useState<MembershipPlan[]>([]);
@@ -239,6 +244,7 @@ export const MemberDetailDrawer: React.FC<MemberDetailDrawerProps> = ({
                 }),
             });
             setIsRenewModalOpen(false);
+            void queryClient.invalidateQueries({ queryKey: ['class-member-summary', member.branch_id, member.id] });
             await loadMemberContext();
             onMembershipUpdated?.();
         } catch (error: any) {
@@ -329,6 +335,10 @@ export const MemberDetailDrawer: React.FC<MemberDetailDrawerProps> = ({
                             </div>
                         )}
                     </div>
+
+                    <React.Fragment key={`${member.branch_id}:${member.id}`}>
+                        <MemberClassSection branchId={member.branch_id} memberId={member.id} timezone={timezone} />
+                    </React.Fragment>
 
                     <div>
                         <h4 className="font-semibold text-slate-900 flex items-center gap-2 mb-4">

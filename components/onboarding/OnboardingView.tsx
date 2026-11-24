@@ -50,7 +50,6 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ userId, onComple
                 body: JSON.stringify({
                     name: gymName,
                     address: address || null,
-                    user_id: userId,
                     billing_cycle: billingCycle,
                 }),
             });

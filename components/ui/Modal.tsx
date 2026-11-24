@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useId, useRef } from 'react';
 import { X } from 'lucide-react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 
 interface ModalProps {
     isOpen: boolean;
@@ -10,19 +11,9 @@ interface ModalProps {
 }
 
 export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, width = 'max-w-md' }) => {
-    useEffect(() => {
-        const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
-        };
-        if (isOpen) {
-            document.addEventListener('keydown', handleEscape);
-            document.body.style.overflow = 'hidden';
-        }
-        return () => {
-            document.removeEventListener('keydown', handleEscape);
-            document.body.style.overflow = 'unset';
-        };
-    }, [isOpen, onClose]);
+    const panelRef = useRef<HTMLDivElement>(null);
+    const titleId = useId();
+    useDialogFocus(isOpen, panelRef, onClose);
 
     if (!isOpen) return null;
 
@@ -35,10 +26,18 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
             />
 
             {/* Modal Content */}
-            <div className={`relative bg-white rounded-xl shadow-xl border border-slate-100 w-full ${width} transform transition-all animate-in zoom-in-95 slide-in-from-bottom-2 duration-200`}>
+            <div
+                ref={panelRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                tabIndex={-1}
+                className={`relative outline-none bg-white rounded-xl shadow-xl border border-slate-100 w-full ${width} transform transition-all animate-in zoom-in-95 slide-in-from-bottom-2 duration-200`}>
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-50">
-                    <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+                    <h3 id={titleId} className="text-lg font-semibold text-slate-900">{title}</h3>
                     <button
+                        type="button"
+                        aria-label="Cerrar"
                         onClick={onClose}
                         className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-50 transition-colors"
                     >
