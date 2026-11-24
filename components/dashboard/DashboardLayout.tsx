@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Search, Bell, LogOut, ChevronUp, Settings, User } from 'lucide-react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { menuItems } from './navigation';
+import { SessionExpiredBanner } from '../ui/SessionExpiredBanner';
 
 interface UserMenuProps {
     userName: string;
@@ -130,6 +131,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ activeTab, onT
 
             {/* Main Content Area */}
             <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#FAFAFA]">
+                <SessionExpiredBanner />
 
                 {/* Header */}
                 <header className="h-16 border-b border-slate-100 bg-white flex items-center justify-between px-6 shrink-0 z-10">

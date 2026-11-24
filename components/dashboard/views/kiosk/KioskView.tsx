@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Lock } from 'lucide-react';
 import { VisitView } from '../VisitView';
 import { KioskPinModal } from './KioskPinModal';
+import { SessionExpiredBanner } from '../../../ui/SessionExpiredBanner';
 
 interface KioskViewProps {
     branchId: string;
@@ -27,6 +28,8 @@ export const KioskView: React.FC<KioskViewProps> = ({ branchId, branchName, onEx
                     <Lock size={18} />
                 </button>
             </header>
+
+            <SessionExpiredBanner />
 
             {/* Visit view content */}
             <div className="flex-1 overflow-auto p-6 sm:p-8">
