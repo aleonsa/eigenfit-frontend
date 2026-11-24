@@ -233,7 +233,7 @@ export function MemberClassSection({ branchId, memberId, timezone }: { branchId:
                             type="button" className="!px-3 !py-2" aria-expanded={pickerOpen} aria-controls={pickerId}
                             disabled={!pickerOpen && Boolean(unavailable)} onClick={() => setPickerOpen(open => !open)}
                         >
-                            {pickerOpen ? 'Cerrar horarios' : 'Reservar clase'}
+                            {pickerOpen ? 'Ocultar clases' : 'Reservar clase'}
                         </Button>
                     </div>
                     {data.class_access === 'credits' && (

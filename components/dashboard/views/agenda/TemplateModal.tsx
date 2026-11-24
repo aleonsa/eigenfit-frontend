@@ -190,7 +190,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                             )}
                             {missingCoaches && (
                                 <li>
-                                    Al menos un <strong>coach</strong>: en <em>Equipo de trabajo</em>, marca al empleado con
+                                    Al menos un <strong>coach</strong>: en <em>Staff/Empleados</em>, marca al empleado con
                                     “Da clases”.
                                 </li>
                             )}
