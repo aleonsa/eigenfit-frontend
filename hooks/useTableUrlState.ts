@@ -2,6 +2,11 @@ import { useSyncExternalStore } from 'react';
 
 const URL_CHANGE = 'dashboard-url-change';
 
+export const clearTableParams = {
+    status: null, plan_id: null, last_visit: null, joined_from: null, joined_before: null,
+    sort: null, page: null, limit: null, coach: null, role: null,
+};
+
 function subscribe(notify: () => void) {
     window.addEventListener(URL_CHANGE, notify);
     window.addEventListener('popstate', notify);

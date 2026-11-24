@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { DataTable, Column } from '../../ui/DataTable';
-import { useApi } from '../../../hooks/useApi';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { DataTable, type Column, type Sort } from '../../ui/data-table/DataTable';
+import { MobileTableSort, TableToolbar } from '../../ui/data-table/TableToolbar';
+import { sortParam, useListControls } from '../../ui/data-table/useListControls';
+import { isAuthError, useApi } from '../../../hooks/useApi';
 import { MemberDetailDrawer } from './MemberDetailDrawer';
 
 interface AttendanceRecord {
@@ -18,14 +20,9 @@ interface AttendanceRecord {
 
 interface AttendancePage {
     items: AttendanceRecord[];
-    total: number;
-}
-
-interface MemberRecord {
-    id: string;
-    code: number;
-    full_name: string;
-    role: string;
+    total: number | null;
+    total_capped?: boolean;
+    has_more?: boolean;
 }
 
 interface Member {
@@ -54,8 +51,6 @@ interface CheckInRow {
     status: 'Activo' | 'Inactivo';
     type: 'M' | 'E';
 }
-
-type TypeFilter = 'all' | 'M' | 'E';
 
 interface HomeViewProps {
     branchId: string;
@@ -98,18 +93,21 @@ const formatCode = (code: number, role: string): string =>
     role === 'employee' ? `E-${code}` : String(code);
 
 
-const filterButtons: { value: TypeFilter; label: string }[] = [
+const filterButtons = [
     { value: 'all', label: 'Todos' },
-    { value: 'M', label: 'Miembros' },
-    { value: 'E', label: 'Empleados' },
-];
+    { value: 'member', label: 'Miembros' },
+    { value: 'employee', label: 'Empleados' },
+] as const;
 
-const PAGE_SIZE = 20;
+const sortOptions = [{ id: 'check_in_time', label: 'Entrada' }, { id: 'member_name', label: 'Nombre' }] as const;
+type SortKey = (typeof sortOptions)[number]['id'];
+const defaultSort: Sort<SortKey> = { key: 'check_in_time', direction: 'desc' };
 
 export const HomeView: React.FC<HomeViewProps> = ({ branchId }) => {
     const { apiCall } = useApi();
-    const [page, setPage] = useState(0);
-    const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+    const controls = useListControls(sortOptions.map(option => option.id), defaultSort);
+    const { params, q, typing, page, limit, offset, sort } = controls;
+    const role = filterButtons.find(button => button.value === params.get('role'))?.value ?? 'all';
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
@@ -124,44 +122,35 @@ export const HomeView: React.FC<HomeViewProps> = ({ branchId }) => {
         }
     };
 
-    const columns: Column<CheckInRow>[] = [
+    function person(row: CheckInRow, blocked: boolean) {
+        const content = <>
+            <span aria-hidden="true" className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${row.status === 'Activo' ? 'bg-green-500' : 'bg-slate-400'}`}>{row.initials}</span>
+            <span className="break-words font-medium text-slate-900">{row.name}</span>
+        </>;
+        return row.type === 'M' ? <button type="button" disabled={blocked} onClick={() => void handleRowClick(row)}
+            className="flex min-h-11 items-center gap-3 text-left enabled:hover:underline md:min-h-8">{content}</button>
+            : <span className="flex items-center gap-3">{content}</span>;
+    }
+
+    function statusBadge(row: CheckInRow) {
+        return row.type === 'M' && <span className={`inline-flex rounded px-2 py-0.5 text-xs font-medium ${row.status === 'Activo' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{row.status}</span>;
+    }
+
+    const columns: Column<CheckInRow, SortKey>[] = [
         {
+            id: 'code',
             header: 'ID',
             cell: (row) => (
                 <span className="font-mono font-semibold text-slate-700">{row.displayCode}</span>
             ),
             className: 'w-20'
         },
+        { id: 'name', header: 'Nombre', sortKey: 'member_name', cell: person },
+        { id: 'checkIn', header: 'Entrada', sortKey: 'check_in_time', cell: row => row.checkIn },
+        { id: 'checkOut', header: 'Salida', cell: row => row.checkOut },
+        { id: 'status', header: 'Estado', cell: statusBadge },
         {
-            header: 'Nombre',
-            cell: (row) => (
-                <div
-                    className={`flex items-center gap-3 ${row.type === 'M' ? 'cursor-pointer hover:opacity-70' : ''}`}
-                    onClick={() => handleRowClick(row)}
-                >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white
-                        ${row.status === 'Activo' ? 'bg-green-500' : 'bg-slate-400'}`}>
-                        {row.initials}
-                    </div>
-                    <span className={`font-medium text-slate-900 ${row.type === 'M' ? 'hover:text-blue-600 hover:underline' : ''}`}>{row.name}</span>
-                </div>
-            )
-        },
-        { header: 'Entrada', accessorKey: 'checkIn' },
-        { header: 'Salida', accessorKey: 'checkOut' },
-        {
-            header: 'Estado',
-            cell: (row) => {
-                if (row.type === 'E') return null;
-                return (
-                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium
-                        ${row.status === 'Activo' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {row.status}
-                    </span>
-                );
-            }
-        },
-        {
+            id: 'type',
             header: 'Tipo',
             cell: (row) => (
                 <span className={`inline-flex w-6 h-6 items-center justify-center rounded text-xs font-bold
@@ -172,24 +161,24 @@ export const HomeView: React.FC<HomeViewProps> = ({ branchId }) => {
         }
     ];
 
-    useEffect(() => {
-        setPage(0);
-    }, [typeFilter]);
-
     const todayInMexico = getMexicoDateParam();
-    const role = typeFilter === 'E' ? 'employee' : typeFilter === 'M' ? 'member' : 'all';
-
-    const { data, isLoading: loading } = useQuery({
-        queryKey: ['home', branchId, todayInMexico, page, typeFilter],
-        queryFn: async () => {
-            const skip = page * PAGE_SIZE;
-            const [attendancesPage, totalAttendancesPage, membersPage] = await Promise.all([
-                apiCall<AttendancePage>(`/api/v1/attendances/page?branch_id=${branchId}&attendance_date=${todayInMexico}&role=${role}&skip=${skip}&limit=${PAGE_SIZE}`),
-                apiCall<AttendancePage>(`/api/v1/attendances/page?branch_id=${branchId}&attendance_date=${todayInMexico}&role=all&skip=0&limit=1`),
-                apiCall<{ items: MemberRecord[]; total: number }>(`/api/v1/members?branch_id=${branchId}&limit=1`),
+    const stats = useQuery({
+        queryKey: ['home', branchId, todayInMexico, 'stats'],
+        queryFn: async ({ signal }) => {
+            const [visits, members] = await Promise.all([
+                apiCall<AttendancePage>(`/api/v1/attendances/page?branch_id=${branchId}&attendance_date=${todayInMexico}&role=all&skip=0&limit=1`, { signal }),
+                apiCall<{ total: number }>(`/api/v1/members?branch_id=${branchId}&limit=1`, { signal }),
             ]);
-
-            const rows: CheckInRow[] = attendancesPage.items.map(a => {
+            return { todayVisits: visits.total, totalMembers: members.total };
+        },
+    });
+    const result = useQuery({
+        queryKey: ['home', branchId, todayInMexico, { role, q, sort: sortParam(sort), offset, limit }],
+        queryFn: async ({ signal }) => {
+            const request = new URLSearchParams({ branch_id: branchId, attendance_date: todayInMexico, role, q, sort: sortParam(sort),
+                offset: String(offset), skip: String(offset), limit: String(limit) });
+            const attendance = await apiCall<AttendancePage>(`/api/v1/attendances/page?${request}`, { signal });
+            const rows: CheckInRow[] = attendance.items.map(a => {
                 const name = a.member_name ?? 'Desconocido';
                 const memberRole = a.member_role ?? 'member';
                 const code = a.member_code ?? 0;
@@ -211,20 +200,18 @@ export const HomeView: React.FC<HomeViewProps> = ({ branchId }) => {
                 };
             });
 
-            return {
-                rows,
-                tableTotal: attendancesPage.total,
-                todayVisits: totalAttendancesPage.total,
-                totalMembers: membersPage.total,
-            };
+            return { ...attendance, rows };
         },
-        placeholderData: keepPreviousData,
+        placeholderData: (previous, previousQuery) => previousQuery?.queryKey[1] === branchId && previousQuery.queryKey[2] === todayInMexico ? previous : undefined,
     });
 
-    const allRows = data?.rows ?? [];
-    const tableTotal = data?.tableTotal ?? 0;
-    const todayVisits = data?.todayVisits ?? null;
-    const totalMembers = data?.totalMembers ?? null;
+    const rows = result.data?.rows ?? [];
+    const total = result.data?.total ?? null;
+    const hasMore = controls.canAdvance && (result.data?.has_more ?? (total !== null && offset + rows.length < total));
+    const legacySearch = result.data && !result.isPlaceholderData && result.data.has_more === undefined && (q || params.has('sort'));
+    const authError = isAuthError(result.error);
+    const todayVisits = stats.data?.todayVisits ?? null;
+    const totalMembers = stats.data?.totalMembers ?? null;
 
     return (
         <>
@@ -249,36 +236,28 @@ export const HomeView: React.FC<HomeViewProps> = ({ branchId }) => {
                 ))}
             </div>
 
-            {/* Type Filter */}
-            <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-100 w-fit shadow-[0_2px_10px_-4px_rgba(0,0,0,0.02)]">
-                {filterButtons.map(btn => (
-                    <button
-                        key={btn.value}
-                        onClick={() => setTypeFilter(btn.value)}
-                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                            typeFilter === btn.value
-                                ? 'bg-slate-900 text-white'
-                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-                        }`}
-                    >
-                        {btn.label}
-                    </button>
-                ))}
-            </div>
-
-            {/* Today's Activity Table */}
             <DataTable
                 title="Actividad de Hoy"
-                data={allRows}
+                rows={rows}
                 columns={columns}
-                searchPlaceholder="Buscar por nombre..."
-                loading={loading}
-                pagination={{
-                    page,
-                    pageSize: PAGE_SIZE,
-                    totalItems: tableTotal,
-                    onPageChange: setPage,
-                }}
+                sort={sort}
+                onSort={controls.cycleSort}
+                toolbar={<><TableToolbar title="Actividad de Hoy" search={{ ...controls.search, placeholder: 'Buscar por nombre o código…', pending: typing || (!!q && result.isFetching) }}
+                    presets={filterButtons.map(({ value, label }) => <button key={value} type="button" aria-pressed={role === value}
+                        onClick={() => controls.criteria({ role: value === 'all' ? null : value })}
+                        className={`min-h-11 rounded-md px-3 text-sm font-medium md:min-h-8 ${role === value ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}>{label}</button>)}
+                    mobileSort={<MobileTableSort value={sortParam(sort)} options={sortOptions} change={controls.setSort} />} />
+                    {legacySearch && <p className="px-4 pb-3 text-sm text-slate-600" role="status">La búsqueda y el orden aún no están disponibles en este servidor.</p>}
+                </>}
+                renderMobileCard={(row, blocked) => <>
+                    <div className="flex flex-wrap items-center justify-between gap-2">{person(row, blocked)}{statusBadge(row)}</div>
+                    <p className="mt-2 text-xs text-slate-600">{row.displayCode} · {row.type === 'M' ? 'Miembro' : 'Empleado'}</p>
+                    <p className="mt-2 text-sm">Entrada: {row.checkIn || '—'} · Salida: {row.checkOut || '—'}</p>
+                </>}
+                page={{ index: page, size: limit, total, capped: result.data?.total_capped ?? false, hasMore, change: controls.changePage, changeSize: controls.changeSize }}
+                pending={result.isPending} refreshing={!result.isPending && (result.isFetching || typing)} blocked={result.isPlaceholderData || typing || authError}
+                error={result.isError && !authError ? 'No pudimos cargar la actividad.' : undefined} retry={() => void result.refetch()}
+                empty={!authError && <p className="px-4 py-12 text-center text-sm text-slate-600">{q || role !== 'all' ? 'Sin coincidencias' : 'No hay visitas en esta página'}</p>}
             />
         </div>
         </>

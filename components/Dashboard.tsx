@@ -9,7 +9,7 @@ import { SettingsView } from './dashboard/views/SettingsView';
 import { KioskView } from './dashboard/views/kiosk/KioskView';
 import { AgendaView } from './dashboard/views/agenda/AgendaView';
 import { menuItems } from './dashboard/navigation';
-import { updateTableUrl, useTableUrlState } from '../hooks/useTableUrlState';
+import { clearTableParams, updateTableUrl, useTableUrlState } from '../hooks/useTableUrlState';
 
 const KIOSK_STORAGE_KEY = 'eigenfit_kiosk_mode';
 
@@ -46,11 +46,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName, user
 
     function changeTab(tab: string) {
         if (tab === activeTab) return;
-        updateTableUrl({
-            tab: tab === 'inicio' ? null : tab,
-            status: null, plan_id: null, last_visit: null, joined_from: null, joined_before: null,
-            sort: null, page: null, limit: null,
-        });
+        updateTableUrl({ ...clearTableParams, tab: tab === 'inicio' ? null : tab });
     }
 
     const renderContent = () => {
@@ -66,7 +62,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ branchId, branchName, user
             case 'members':
                 return <TableView key={`members:${branchId}`} title="Miembros" type="member" branchId={branchId} timezone={branchTimezone} />;
             case 'employees':
-                return <TableView key={`employees:${branchId}`} title="Equipo de Trabajo" type="employee" branchId={branchId} />;
+                return <TableView key={`employees:${branchId}`} title="Equipo de Trabajo" type="employee" branchId={branchId} timezone={branchTimezone} />;
             case 'memberships':
                 return <MembershipsView branchId={branchId} />;
             case 'settings':
