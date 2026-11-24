@@ -15,7 +15,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../ui/Button';
 import { StreakLeaderboard, type StreakLeaderboardItem } from './visit/StreakLeaderboard';
-import { ApiError, useApi } from '../../../hooks/useApi';
+import { ApiError, isAuthError, useApi } from '../../../hooks/useApi';
 
 interface StreakLeaderboardItemRecord {
     member_id: string;
@@ -214,10 +214,14 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
             `/api/v1/attendances/daily-stats?branch_id=${branchId}&attendance_date=${todayInMexico}`
         ),
         enabled: !!branchId,
-        // Local scans update this cache directly; polling picks up other devices.
-        refetchInterval: 5 * 60 * 1000,
+        retry: (failureCount, err) => (isAuthError(err) ? false : failureCount < 1),
+        // Local scans update this cache directly; pause polling on auth error (loginWithRedirect reloads with a fresh QueryClient).
+        refetchInterval: (query) => (isAuthError(query.state.error) ? false : 5 * 60 * 1000),
     });
-    const statsError = statsQueryError ? 'No se pudieron cargar las visitas del día.' : '';
+    const statsError =
+        statsQueryError && !isAuthError(statsQueryError)
+            ? 'No se pudieron cargar las visitas del día.'
+            : '';
 
     const {
         data: streakData,
@@ -238,10 +242,15 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
             }));
         },
         enabled: !!branchId,
-        refetchInterval: 15 * 60 * 1000,
+        retry: (failureCount, err) => (isAuthError(err) ? false : failureCount < 1),
+        // Pause polling on auth error; recovery via loginWithRedirect reloads the page and creates a new QueryClient.
+        refetchInterval: (query) => (isAuthError(query.state.error) ? false : 15 * 60 * 1000),
     });
     const streakItems: StreakLeaderboardItem[] = streakData ?? [];
-    const streakError = streakQueryError ? 'No se pudo cargar la racha histórica.' : '';
+    const streakError =
+        streakQueryError && !isAuthError(streakQueryError)
+            ? 'No se pudo cargar la racha histórica.'
+            : '';
 
     useEffect(() => {
         const timer = window.setInterval(() => {
@@ -353,6 +362,7 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                 `/api/v1/attendances/scan?branch_id=${branchId}`,
                 {
                     method: 'POST',
+                    allowAnonymous: true,
                     body: JSON.stringify({
                         role: parsed.role,
                         code: parsed.code,
@@ -450,7 +460,7 @@ export const VisitView: React.FC<VisitViewProps> = ({ branchId, onActivateKiosk 
                         <div>
                             <p className="text-sm font-semibold text-slate-500">Visitas Hoy</p>
                             <p className="mt-1 text-5xl font-bold tracking-tight text-slate-900 leading-none">
-                                {statsLoading && totalVisitsToday === 0 ? '—' : totalVisitsToday}
+                                {dailyStats === undefined || (statsLoading && totalVisitsToday === 0) ? '—' : totalVisitsToday}
                             </p>
                         </div>
 
